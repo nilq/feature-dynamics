@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "feature-dynamics"
+version = "0.1.0"
+description = "Planting language models, seeing how they grow etc."
+authors = ["Niels Horn <niels@horn.ninja>"]
+license = "MIT license"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "~3.11"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
