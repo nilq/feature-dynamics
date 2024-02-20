@@ -5,9 +5,16 @@ description = "Planting language models, seeing how they grow etc."
 authors = ["Niels Horn <niels@horn.ninja>"]
 license = "MIT license"
 readme = "README.md"
+packages = [
+    { include = "models" }
+]
 
 [tool.poetry.dependencies]
 python = "~3.11"
+torch = "^2.2.0"
+einops = "^0.7.0"
+xformers = "^0.0.24"
+pytest = "^8.0.1"
 
 
 [build-system]

@@ -6,7 +6,7 @@ import torch.nn as nn
 import xformers.ops as xops
 
 from torch.nn import functional as F
-from encoding import RotaryPositionalEncoding
+from models.transformer.encoding import RotaryPositionalEncoding
 
 
 class Attention(nn.Module):
@@ -29,12 +29,23 @@ class Attention(nn.Module):
         chunks = self.qkv_transform(x).chunk(3, dim=-1)
         query, key, value = (einops.rearrange(chunk, "b l (head k) -> b head l k", head=self.num_heads) for chunk in chunks)
 
-        attention_output = xops.memory_efficient_attention(
-            query, key, value,
-            attn_bias=xops.LowerTriangularMask()
-        )
-        attention_output = einops.rearrange(attention_output, "1 s h d -> s (h d)", h=self.n_heads)
+        # TODO: Use this on CUDA.
+        # attention_output = xops.memory_efficient_attention(
+        #     query, key, value,
+        #     attn_bias=xops.LowerTriangularMask()
+        # )
+        # attention_output = einops.rearrange(attention_output, "1 s h d -> s (h d)", h=self.n_heads)
 
+        # return self.out_transform(attention_output)
+
+        # Scaled Dot-Product Attention
+        scaling_factor = query.size(-1) ** 0.5
+        attention_scores = torch.matmul(query, key.transpose(-2, -1)) / scaling_factor
+        attention_scores = F.softmax(attention_scores, dim=-1)
+        attention_output = attention_scores @ value
+
+        # Rearrange and transform the output
+        attention_output = einops.rearrange(attention_output, "b head l k -> b l (head k)")
         return self.out_transform(attention_output)
 
 
@@ -49,7 +60,7 @@ class FeedForward(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         hidden = F.gelu(self.linear_in(x))
         gate = self.linear_gate(hidden)
-        return self.layer_hidden(hidden * gate)
+        return self.linear_hidden(hidden * gate)
 
 
 class RMSNorm(nn.Module):
