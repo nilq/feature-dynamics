@@ -3,6 +3,7 @@ import pytest
 from models.transformer import Transformer
 import torch
 
+
 def test_transformer() -> None:
     # Parameters for the transformer.
     vocab_dim = 8
@@ -17,10 +18,10 @@ def test_transformer() -> None:
         embedding_dim=embedding_dim,
         max_seq_len=max_seq_len,
         num_layers=num_layers,
-        num_heads=num_heads
+        num_heads=num_heads,
     )
 
     sample_input = torch.randint(low=0, high=vocab_dim, size=(1, max_seq_len))
     output = tinyformer(sample_input)
 
-    assert output.shape == (1, max_seq_len, vocab_dim), "Output shape is incorrect"
+    assert output.shape == (1, max_seq_len, vocab_dim), "Output shape is incorrect."

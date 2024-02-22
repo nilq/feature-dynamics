@@ -6,7 +6,8 @@ authors = ["Niels Horn <niels@horn.ninja>"]
 license = "MIT license"
 readme = "README.md"
 packages = [
-    { include = "models" }
+    { include = "models" },
+    { include = "training" }
 ]
 
 [tool.poetry.dependencies]
@@ -15,6 +16,15 @@ torch = "^2.2.0"
 einops = "^0.7.0"
 xformers = "^0.0.24"
 pytest = "^8.0.1"
+accelerate = "^0.27.2"
+datasets = "^2.17.1"
+pydantic = "^2.6.1"
+syntaxi = {git = "https://github.com/nilq/syntaxi"}
+transformers = "^4.38.1"
+wandb = "^0.16.3"
+black = "^24.2.0"
+huggingface-hub = "^0.20.3"
+typer = "^0.9.0"
 
 
 [build-system]

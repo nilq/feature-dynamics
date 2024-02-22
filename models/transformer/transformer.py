@@ -27,7 +27,10 @@ class Attention(nn.Module):
         batch_dim, sequence_dim, _ = x.size()
 
         chunks = self.qkv_transform(x).chunk(3, dim=-1)
-        query, key, value = (einops.rearrange(chunk, "b l (head k) -> b head l k", head=self.num_heads) for chunk in chunks)
+        query, key, value = (
+            einops.rearrange(chunk, "b l (head k) -> b head l k", head=self.num_heads)
+            for chunk in chunks
+        )
 
         # TODO: Use this on CUDA.
         # attention_output = xops.memory_efficient_attention(
@@ -35,7 +38,6 @@ class Attention(nn.Module):
         #     attn_bias=xops.LowerTriangularMask()
         # )
         # attention_output = einops.rearrange(attention_output, "1 s h d -> s (h d)", h=self.n_heads)
-
         # return self.out_transform(attention_output)
 
         # Scaled Dot-Product Attention
@@ -45,7 +47,9 @@ class Attention(nn.Module):
         attention_output = attention_scores @ value
 
         # Rearrange and transform the output
-        attention_output = einops.rearrange(attention_output, "b head l k -> b l (head k)")
+        attention_output = einops.rearrange(
+            attention_output, "b head l k -> b l (head k)"
+        )
         return self.out_transform(attention_output)
 
 
@@ -80,13 +84,10 @@ class TransformerBlock(nn.Module):
         num_heads: int,
         embedding_dim: int,
         hidden_dim: int,
-        norm_epsilon: float = 1e-6
+        norm_epsilon: float = 1e-6,
     ) -> None:
         super().__init__()
-        self.attention = Attention(
-            embedding_dim=embedding_dim,
-            num_heads=num_heads
-        )
+        self.attention = Attention(embedding_dim=embedding_dim, num_heads=num_heads)
         self.attention_norm = RMSNorm(dim=embedding_dim, epsilon=norm_epsilon)
         self.feed_forward_norm = RMSNorm(dim=embedding_dim, epsilon=norm_epsilon)
         self.feed_forward = FeedForward(input_dim=embedding_dim, hidden_dim=hidden_dim)
@@ -94,7 +95,9 @@ class TransformerBlock(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         attention = self.attention(self.attention_norm(x))
         after_attention = x + attention
-        return after_attention + self.feed_forward(self.feed_forward_norm(after_attention))
+        return after_attention + self.feed_forward(
+            self.feed_forward_norm(after_attention)
+        )
 
 
 class Transformer(nn.Module):
@@ -105,7 +108,7 @@ class Transformer(nn.Module):
         max_seq_len: int,
         num_layers: int,
         num_heads: int,
-        block_hidden_dim: int = 0
+        block_hidden_dim: int = 0,
     ) -> None:
         super().__init__()
 
@@ -113,11 +116,17 @@ class Transformer(nn.Module):
 
         self.embedding_dim = embedding_dim
         self.embedding = nn.Embedding(vocab_dim, embedding_dim)
-        self.positional_encoding = RotaryPositionalEncoding(embedding_dim=embedding_dim, max_seq_len=max_seq_len)
+        self.positional_encoding = RotaryPositionalEncoding(
+            embedding_dim=embedding_dim, max_seq_len=max_seq_len
+        )
         self.blocks = nn.ModuleList(
             [
-                TransformerBlock(embedding_dim=embedding_dim, hidden_dim=block_hidden_dim, num_heads=num_heads)
-                    for i in range(num_layers)
+                TransformerBlock(
+                    embedding_dim=embedding_dim,
+                    hidden_dim=block_hidden_dim,
+                    num_heads=num_heads,
+                )
+                for i in range(num_layers)
             ]
         )
         self.feed_forward = nn.Linear(embedding_dim, vocab_dim)
