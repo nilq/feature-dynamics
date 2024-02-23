@@ -87,8 +87,6 @@ def train_epoch(
         if completed_steps >= max_train_steps:
             break
 
-        break  # TODO: this is just testing on CPU.
-
     return completed_steps, total_loss
 
 
@@ -206,8 +204,6 @@ def start_training_run(file_path: str) -> None:
 
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Total parameters: {total_params}")
-
-    __import__("sys").exit()
 
     train(accelerator=accelerator, model=model, training_config=training_config)
 
