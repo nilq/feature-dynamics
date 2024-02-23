@@ -200,6 +200,7 @@ def start_training_run(file_path: str) -> None:
         max_seq_len=training_config.transformer_config.max_seq_len,
         num_layers=training_config.transformer_config.num_layers,
         num_heads=training_config.transformer_config.num_heads,
+        block_hidden_dim=training_config.transformer.num_heads,
     )
 
     total_params = sum(p.numel() for p in model.parameters())

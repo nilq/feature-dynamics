@@ -61,7 +61,7 @@ class FeedForward(nn.Module):
         self.linear_gate = nn.Linear(input_dim, hidden_dim, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        hidden = F.gelu(self.linear_in(x))
+        hidden = F.relu(self.linear_in(x))
         gate = self.linear_gate(hidden)
         return self.linear_hidden(hidden * gate)
 
