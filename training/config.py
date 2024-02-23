@@ -1,6 +1,8 @@
 """Training configuration models."""
 
 import tomllib
+
+from typing import Self
 from pydantic import BaseModel, Field
 
 
@@ -33,6 +35,12 @@ class TransformerConfig(BaseModel):
     num_heads: int = Field(..., description="Number of attention heads.")
 
 
+class WandbConfig(BaseModel):
+    project: str = Field(..., description="Name of Wandb project.")
+    notes: str = Field(..., description="Notes for run.")
+    tags: list[str] = Field(..., description="List of tags for run.")
+
+
 class TrainingConfig(BaseModel):
     epochs: int = Field(..., description="Epochs to train for.")
     learning_rate: float = Field(..., description="Learning rate.")
@@ -41,25 +49,22 @@ class TrainingConfig(BaseModel):
     )
     gradient_accumulation_steps: int
     warmup_steps: int
-    use_wandb: bool = Field(
-        default=False,
-        description="Whether to use Wandb for logging and saving artefacts.",
-    )
+
+    wandb: WandbConfig | None = Field(default=None, description="Using Wandb.")
     dataset_config: DatasetConfig
     transformer_config: TransformerConfig
 
 
-def load_training_config_from_toml(file_path: str) -> TrainingConfig:
-    """Loads the training configuration from a TOML file.
+    @classmethod
+    def from_toml_path(cls, file_path: str) -> Self:
+        """Loads the training configuration from a TOML file.
 
-    Args:
-        file_path (str): Path to the TOML file.
+        Args:
+            file_path (str): Path to the TOML file.
 
-    Returns:
-        TrainingConfig: An instance of the TrainingConfig class with data loaded from the TOML file.
-    """
-    with open(file_path, "rb") as file:
-        toml_data = tomllib.load(file)["training"]
-
-    # Deserialize the TOML data into TrainingConfig
-    return TrainingConfig(**toml_data)
+        Returns:
+            TrainingConfig: An instance of the TrainingConfig class with data loaded from the TOML file.
+        """
+        with open(file_path, "rb") as file:
+            toml_data = tomllib.load(file)["training"]
+        return cls(**toml_data)

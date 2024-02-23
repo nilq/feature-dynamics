@@ -81,7 +81,6 @@ def datasplit_from_dataset_config(
         }
 
     with accelerator.main_process_first():
-        print(raw_datasets["train"].column_names)
         tokenized_datasets = raw_datasets.map(
             function=tokenize,
             batched=True,
