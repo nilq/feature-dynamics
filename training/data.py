@@ -53,36 +53,50 @@ def datasplit_from_dataset_config(
         dataset_config.test_percentage + dataset_config.validation_percentage
     )
 
-    # Load datasets using complicated fraction mathematics.
-    raw_datasets["test"] = load_dataset(
-        path=dataset_config.dataset_id,
-        name=dataset_config.dataset_config_name,
-        split=f"train[:{int(dataset_config.test_percentage * 100)}%]",
-    )
+    if list(raw_datasets) == ["train"]:
+        # Load datasets using complicated fraction mathematics.
+        raw_datasets["test"] = load_dataset(
+            path=dataset_config.dataset_id,
+            name=dataset_config.dataset_config_name,
+            split=f"train[:{int(dataset_config.test_percentage * 100)}%]",
+        )
 
-    raw_datasets["validation"] = load_dataset(
-        path=dataset_config.dataset_id,
-        name=dataset_config.dataset_config_name,
-        split=(
-            f"train[{int(dataset_config.test_percentage * 100)}%:"
-            f"{int(end_of_validation * 100)}%]"
-        ),
-    )
+        raw_datasets["validation"] = load_dataset(
+            path=dataset_config.dataset_id,
+            name=dataset_config.dataset_config_name,
+            split=(
+                f"train[{int(dataset_config.test_percentage * 100)}%:"
+                f"{int(end_of_validation * 100)}%]"
+            ),
+        )
 
-    raw_datasets["train"] = load_dataset(
-        path=dataset_config.dataset_id,
-        name=dataset_config.dataset_config_name,
-        split=f"train[{int(end_of_validation * 100)}%:]",
-    )
+        raw_datasets["train"] = load_dataset(
+            path=dataset_config.dataset_id,
+            name=dataset_config.dataset_config_name,
+            split=f"train[{int(end_of_validation * 100)}%:]",
+        )
+    else:
+        raw_datasets["test"] = load_dataset(
+            path=dataset_config.dataset_id,
+            name=dataset_config.dataset_config_name,
+            split="train",
+        )
+
+        raw_datasets["validation"] = load_dataset(
+            path=dataset_config.dataset_id,
+            name=dataset_config.dataset_config_name,
+            split="validation",
+        )
+
+        raw_datasets["test"] = load_dataset(
+            path=dataset_config.dataset_id,
+            name=dataset_config.dataset_config_name,
+            split="test",
+        )
 
     def tokenize(examples, text_key: str = dataset_config.dataset_text_key):
         return {
-            "input_ids": [
-                tokenizer.encode(
-                    text.lower() if dataset_config.use_syntaxi else text
-                ).ids
-                for text in examples[text_key]
-            ]
+            "input_ids": [tokenizer.encode(text).ids for text in examples[text_key]]
         }
 
     with accelerator.main_process_first():

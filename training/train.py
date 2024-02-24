@@ -18,9 +18,28 @@ from training.artifacts import wandb_save_transformer_states
 from training.data import datasplit_from_dataset_config
 from training.config import TrainingConfig
 
+from tokenizers import Tokenizer
 from transformers import get_scheduler
 
 app = typer.Typer()
+
+
+@torch.no_grad
+def sample_from_model(
+    model: torch.nn.Module,
+    accelerator: Accelerator,
+    tokenizer: Tokenizer,
+    prompt: str ="hello",
+    max_length: int = 100,
+):
+    input_ids = tokenizer.encode(prompt, return_tensors="pt")
+    input_ids = input_ids.to(accelerator.device)
+
+    with torch.no_grad():
+        outputs = model.generate(input_ids, max_length=max_length)
+
+    generated_sequence = "".join([tokenizer.decode(output) for output in outputs])
+    return generated_sequence
 
 
 @torch.no_grad
@@ -113,7 +132,10 @@ def train(
 
     # Lion is too hard.
     optimizer = torch.optim.AdamW(
-        params=model.parameters(), lr=training_config.learning_rate
+        params=model.parameters(),
+        lr=training_config.learning_rate
+        betas=tuple(training_config.adam_betas),
+        weight_decay=training_config.weight_decay
     )
 
     learning_rate_scheduler = get_scheduler(
@@ -161,6 +183,12 @@ def train(
             data_loader=dataset_split.validation,
         )
 
+        generated_sequence = sample_from_model(
+            model=model,
+            accelerator=accelerator,
+            tokenizer=tokenizer,
+        )
+
         if training_config.wandb:
             current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
 
@@ -170,6 +198,7 @@ def train(
                     "validation_perplexity": validation_perplexity,
                     "learning_rate": current_learning_rate,
                     "epoch": epoch,
+                    "sampled_sequence": generated_sequence
                 }
             )
 
@@ -205,6 +234,7 @@ def start_training_run(file_path: str) -> None:
     total_params = sum(p.numel() for p in model.parameters())
 
     import pdb
+
     pdb.set_trace()
     print(f"Total parameters: {total_params}")
 
