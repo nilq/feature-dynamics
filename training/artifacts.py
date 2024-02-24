@@ -6,6 +6,7 @@ import numpy as np
 
 from models.transformer import Transformer, TransformerBlock
 
+
 def transformer_block_mlp_weights(block: TransformerBlock) -> dict[str, np.ndarray]:
     return {
         "linear_in": block.feed_forward.linear_in.weight.cpu().detach().numpy(),

@@ -48,7 +48,7 @@ def evaluate(
     try:
         perplexity = math.exp(mean_loss)
     except OverflowError:
-        perplexity = float(inf)
+        perplexity = float("inf")
 
     return perplexity
 

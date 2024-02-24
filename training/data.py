@@ -77,7 +77,12 @@ def datasplit_from_dataset_config(
 
     def tokenize(examples, text_key: str = dataset_config.dataset_text_key):
         return {
-            "input_ids": [tokenizer.encode(text).ids for text in examples[text_key]]
+            "input_ids": [
+                tokenizer.encode(
+                    text.lower() if dataset_config.use_syntaxi else text
+                ).ids
+                for text in examples[text_key]
+            ]
         }
 
     with accelerator.main_process_first():
