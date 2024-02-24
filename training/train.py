@@ -74,12 +74,12 @@ def train_epoch(
             logits = model(input_ids)
             loss = criterion(logits.reshape(-1, logits.size(-1)), labels.reshape(-1))
 
-            total_loss += loss.detach().float()
+            total_loss += loss.item()
 
             accelerator.backward(loss)
+            optimizer.zero_grad()
             optimizer.step()
             learning_rate_scheduler.step()
-            optimizer.step()
 
         if accelerator.sync_gradients:
             completed_steps += 1
@@ -87,7 +87,8 @@ def train_epoch(
         if completed_steps >= max_train_steps:
             break
 
-    return completed_steps, total_loss
+    mean_loss = total_loss / len(data_loader)
+    return completed_steps, mean_loss
 
 
 def train(
@@ -144,7 +145,7 @@ def train(
     for epoch in range(starting_epoch, training_config.epochs):
         model.train()
 
-        completed_steps, total_loss = train_epoch(
+        completed_steps, mean_training_loss = train_epoch(
             model=model,
             accelerator=accelerator,
             data_loader=dataset_split.train,
@@ -161,12 +162,11 @@ def train(
         )
 
         if training_config.wandb:
-            average_training_loss = total_loss / len(dataset_split.train)
             current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
 
             wandb.log(
                 {
-                    "train_mean_loss": average_training_loss,
+                    "train_mean_loss": mean_training_loss,
                     "validation_perplexity": validation_perplexity,
                     "learning_rate": current_learning_rate,
                     "epoch": epoch,
@@ -203,6 +203,9 @@ def start_training_run(file_path: str) -> None:
     )
 
     total_params = sum(p.numel() for p in model.parameters())
+
+    import pdb
+    pdb.set_trace()
     print(f"Total parameters: {total_params}")
 
     train(accelerator=accelerator, model=model, training_config=training_config)
