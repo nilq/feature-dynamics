@@ -99,13 +99,13 @@ def datasplit_from_dataset_config(
             split="validation",
         )
 
-        if "test" in raw_datasets:
+        if "test" in raw_datasets and False:
             raw_datasets["test"] = load_dataset(
                 path=dataset_config.dataset_id,
                 name=dataset_config.dataset_config_name,
                 split="test",
             )
-        else:
+        elif False:
             logger.info("No test set found. Taking a piece of validation.")
 
             raw_datasets["test"] = load_dataset(

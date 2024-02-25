@@ -40,7 +40,7 @@ def sample_from_model(
     input_ids = input_ids.to(accelerator.device)
 
     model.eval()
-    for _ in range(max_length):
+    for _ in range(max_length - len(input_ids)):
         logits, *_ = model(input_ids)
         logits = logits[:, -1, :]
 
