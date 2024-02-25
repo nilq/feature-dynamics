@@ -19,6 +19,7 @@ dataset_text_key = "text"
 tokenizer_id = "nilq/baby-tokenizer"
 batch_size = 64
 block_size = 128
+test_percentage = 0.15
 
 [training.transformer_config]
 vocab_dim = 20001

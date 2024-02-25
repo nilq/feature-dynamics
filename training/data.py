@@ -1,5 +1,6 @@
 """Loading datasets."""
 
+import structlog
 import syntaxi
 import itertools
 
@@ -12,6 +13,9 @@ from transformers import default_data_collator
 
 from training.config import DatasetConfig
 from torch.utils.data import DataLoader
+
+
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -54,6 +58,8 @@ def datasplit_from_dataset_config(
     )
 
     if list(raw_datasets) == ["train"]:
+        logger.info("Only training set available. Slicing it up.")
+
         # Load datasets using complicated fraction mathematics.
         raw_datasets["test"] = load_dataset(
             path=dataset_config.dataset_id,
@@ -88,11 +94,28 @@ def datasplit_from_dataset_config(
             split="validation",
         )
 
-        raw_datasets["test"] = load_dataset(
-            path=dataset_config.dataset_id,
-            name=dataset_config.dataset_config_name,
-            split="test",
-        )
+        if "test" in raw_datasets:
+            raw_datasets["test"] = load_dataset(
+                path=dataset_config.dataset_id,
+                name=dataset_config.dataset_config_name,
+                split="test",
+            )
+        else:
+            logger.info("No test set found. Taking a piece of validation.")
+
+            raw_datasets["test"] = load_dataset(
+                path=dataset_config.dataset_id,
+                name=dataset_config.dataset_config_name,
+                split=f"validation[:{int(dataset_config.test_percentage * 100)}%]",
+            )
+
+            raw_datasets["validation"] = load_dataset(
+                path=dataset_config.dataset_id,
+                name=dataset_config.dataset_config_name,
+                split=(
+                    f"validation[{int(dataset_config.test_percentage * 100)}%:]"
+                ),
+            )
 
     def tokenize(examples, text_key: str = dataset_config.dataset_text_key):
         return {

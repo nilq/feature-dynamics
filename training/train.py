@@ -107,12 +107,19 @@ def train_epoch(
             if completed_steps % log_interval == 0:
                 current_loss = total_loss / completed_steps
                 current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
+
                 if training_config.wandb:
                     wandb.log({
                         "step_loss": current_loss,
                         "learning_rate": current_learning_rate,
                         "step": completed_steps,
                     })
+
+                    with tempfile.TemporaryDirectory(delete=False) as checkpoint_dir:
+                        accelerator.save_state(checkpoint_dir.name)
+                        artifact = wandb.Artifact(f"model-checkpoint-{completed_steps}", type='model')
+                        artifact.add_dir(checkpoint_dir.name)
+                        wandb.log_artifact(artifact)
 
 
         if completed_steps >= max_train_steps:
