@@ -117,7 +117,7 @@ def train_epoch(
         if accelerator.sync_gradients:
             completed_steps += 1
 
-            if completed_steps % log_interval == 0:
+            if completed_steps % log_interval == 0 and accelerator.is_main_process:
                 current_loss = total_loss / completed_steps
                 current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
 
