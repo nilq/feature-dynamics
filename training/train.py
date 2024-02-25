@@ -40,15 +40,18 @@ def sample_from_model(
     input_ids = input_ids.to(accelerator.device)
 
     model.eval()
-    for _ in range(max_length - len(input_ids)):
-        logits, *_ = model(input_ids)
-        logits = logits[:, -1, :]
+    for _ in range(max_length - len(input_ids) - 1):
+        try:
+            logits, *_ = model(input_ids)
+            logits = logits[:, -1, :]
 
-        top_k_logits, top_k_indices = torch.topk(logits, top_k)
-        probabilities = torch.nn.functional.softmax(top_k_logits, dim=-1)
+            top_k_logits, top_k_indices = torch.topk(logits, top_k)
+            probabilities = torch.nn.functional.softmax(top_k_logits, dim=-1)
 
-        next_token = torch.multinomial(probabilities, num_samples=1)
-        input_ids = torch.cat([input_ids, next_token], dim=-1)
+            next_token = torch.multinomial(probabilities, num_samples=1)
+            input_ids = torch.cat([input_ids, next_token], dim=-1)
+        except:
+            break
 
     generated_sequence = tokenizer.decode(input_ids.squeeze().tolist())
     return generated_sequence
@@ -71,8 +74,6 @@ def evaluate(
         logits, *_ = model(input_ids)
         loss = criterion(logits.reshape(-1, logits.size(-1)), labels.reshape(-1))
         losses.append(accelerator.gather_for_metrics(loss.repeat(input_ids.size(0))))
-
-        break
 
     mean_loss = torch.cat(losses).mean().item()
 
@@ -167,8 +168,6 @@ def train(
     )
     max_train_steps = training_config.epochs * accumulation_steps_per_epoch
 
-    print("Max training steps:", max_train_steps)
-
     # Lion is too hard.
     optimizer = torch.optim.AdamW(
         params=model.parameters(),
@@ -199,6 +198,14 @@ def train(
         dataset_split.validation,
         learning_rate_scheduler,
     )
+
+
+    num_steps_per_epoch: int = math.ceil(len(dataset_split.train) / training_config.gradient_accumulation_steps)
+
+    max_train_steps = training_config.epochs * num_steps_per_epoch
+
+    print("Max training steps:", max_train_steps)
+    print("Total batch size:", training_config.gradient_accumulation_steps * training_config.dataset_config.batch_size) 
 
     starting_epoch: int = 0
     completed_steps: int = 0
@@ -249,7 +256,9 @@ def train(
                         "learning_rate": current_learning_rate,
                         "epoch": epoch,
                         "sampled_sequence": generated_sequence,
-                    }
+                        "step": completed_steps
+                    },
+                    step=completed_steps
                 )
 
                 # Every epoch, save the MLP and attention weights.
