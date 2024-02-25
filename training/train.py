@@ -227,31 +227,36 @@ def train(
             data_loader=dataset_split.validation,
         )
 
-        generated_sequence = sample_from_model(
-            model=model,
-            accelerator=accelerator,
-            tokenizer=tokenizer,
-            prompt=training_config.sample_prompt,
-            max_length=training_config.transformer_config.max_seq_len
-        )
 
-        print(f"Sample at {epoch} (val-perplexity {validation_perplexity}):", generated_sequence)
-
-        if training_config.wandb and accelerator.is_main_process:
-            current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
-
-            wandb.log(
-                {
-                    "train_mean_loss": mean_training_loss,
-                    "validation_perplexity": validation_perplexity,
-                    "learning_rate": current_learning_rate,
-                    "epoch": epoch,
-                    "sampled_sequence": generated_sequence,
-                }
+        if accelerator.is_main_process:
+            generated_sequence = sample_from_model(
+                model=model,
+                accelerator=accelerator,
+                tokenizer=tokenizer,
+                prompt=training_config.sample_prompt,
+                max_length=training_config.transformer_config.max_seq_len
             )
 
-            # Every epoch, save the MLP and attention weights.
-            wandb_save_transformer_states(model=model, epoch=epoch)
+            print(f"Sample at {epoch} (val-perplexity {validation_perplexity}):", generated_sequence)
+
+            if training_config.wandb:
+                current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
+
+                wandb.log(
+                    {
+                        "train_mean_loss": mean_training_loss,
+                        "validation_perplexity": validation_perplexity,
+                        "learning_rate": current_learning_rate,
+                        "epoch": epoch,
+                        "sampled_sequence": generated_sequence,
+                    }
+                )
+
+                # Every epoch, save the MLP and attention weights.
+
+                accelerator.wait_for_everyone()
+                unwrapped_model = accelerator.unwrap_model(model)
+                wandb_save_transformer_states(model=unwrapped_model, epoch=epoch)
 
     if training_config.wandb and accelerator.is_main_process:
         accelerator.wait_for_everyone()
