@@ -87,7 +87,7 @@ def datasplit_from_dataset_config(
             split=f"train[{int(end_of_validation * 100)}%:]",
         )
     else:
-        raw_datasets["test"] = load_dataset(
+        raw_datasets["train"] = load_dataset(
             path=dataset_config.dataset_id,
             name=dataset_config.dataset_config_name,
             split="train",

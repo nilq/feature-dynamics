@@ -16,6 +16,7 @@ class Attention(nn.Module):
         self,
         embedding_dim: int,
         num_heads: int,
+        dropout_rate: float = 0.1
     ) -> None:
         super().__init__()
 
@@ -24,6 +25,8 @@ class Attention(nn.Module):
 
         self.qkv_transform = nn.Linear(embedding_dim, 3 * embedding_dim, bias=False)
         self.out_transform = nn.Linear(embedding_dim, embedding_dim, bias=False)
+        self.attention_dropout = nn.Dropout(p=dropout_rate)
+        self.dropout = nn.Dropout(p=dropout_rate)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         batch_dim, sequence_dim, _ = x.size()
@@ -38,25 +41,27 @@ class Attention(nn.Module):
         scaling_factor = query.size(-1) ** 0.5
         attention_scores = torch.matmul(query, key.transpose(-2, -1)) / scaling_factor
         attention_scores = F.softmax(attention_scores, dim=-1)
+        attention_scores = self.attention_dropout(attention_scores)
+
         attention_output = attention_scores @ value
 
         # Rearrange and transform the output
-        attention_output = einops.rearrange(
-            attention_output, "b head l k -> b l (head k)"
-        )
-        return self.out_transform(attention_output), attention_scores
+        attention_output = einops.rearrange(attention_output, "b head l k -> b l (head k)")
+        return self.dropout(self.out_transform(attention_output), attention_scores)
 
 
 class FeedForward(nn.Module):
-    def __init__(self, input_dim: int, hidden_dim: int) -> None:
+    def __init__(self, input_dim: int, hidden_dim: int, dropout_rate: float) -> None:
         super().__init__()
 
         self.linear_in = nn.Linear(input_dim, hidden_dim, bias=False)
         self.linear_hidden = nn.Linear(hidden_dim, input_dim, bias=False)
         self.linear_gate = nn.Linear(input_dim, hidden_dim, bias=False)
 
+        self.dropout = nn.Dropout(p=dropout_rate)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        hidden = F.relu(self.linear_in(x))
+        hidden = self.dropout(F.relu(self.linear_in(x)))
         gate = self.linear_gate(hidden)
         return self.linear_hidden(hidden * gate)
 
@@ -79,12 +84,14 @@ class TransformerBlock(nn.Module):
         embedding_dim: int,
         hidden_dim: int,
         norm_epsilon: float = 1e-6,
+        dropout_rate: float,
+        attention_dropout_rate: float,
     ) -> None:
         super().__init__()
-        self.attention = Attention(embedding_dim=embedding_dim, num_heads=num_heads)
+        self.attention = Attention(embedding_dim=embedding_dim, num_heads=num_heads, dropout_rate=attention_dropout_rate)
         self.attention_norm = RMSNorm(dim=embedding_dim, epsilon=norm_epsilon)
         self.feed_forward_norm = RMSNorm(dim=embedding_dim, epsilon=norm_epsilon)
-        self.feed_forward = FeedForward(input_dim=embedding_dim, hidden_dim=hidden_dim)
+        self.feed_forward = FeedForward(input_dim=embedding_dim, hidden_dim=hidden_dim, dropout_rate=dropout_rate)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         attention_output, attention_scores = self.attention(self.attention_norm(x))
@@ -105,6 +112,8 @@ class Transformer(nn.Module):
         num_layers: int,
         num_heads: int,
         block_hidden_dim: int = 0,
+        dropout_rate: float = 0.1,
+        attention_dropout_rate = 0.1
     ) -> None:
         super().__init__()
 
@@ -121,6 +130,8 @@ class Transformer(nn.Module):
                     embedding_dim=embedding_dim,
                     hidden_dim=block_hidden_dim,
                     num_heads=num_heads,
+                    dropout_rate=dropout_rate,
+                    attention_dropout_rate=attention_dropout_rate
                 )
                 for i in range(num_layers)
             ]
