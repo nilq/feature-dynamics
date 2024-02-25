@@ -29,7 +29,7 @@ def sample_from_model(
     model: torch.nn.Module,
     accelerator: Accelerator,
     tokenizer: Tokenizer,
-    prompt: str ="hello",
+    prompt: str = "hello",
     max_length: int = 100,
 ):
     input_ids = tokenizer.encode(prompt, return_tensors="pt")
@@ -90,7 +90,7 @@ def train_epoch(
             labels = input_ids[:, 1:]
             input_ids = input_ids[:, :-1]
 
-            logits = model(input_ids)
+            logits, *_ = model(input_ids)
             loss = criterion(logits.reshape(-1, logits.size(-1)), labels.reshape(-1))
 
             total_loss += loss.item()
@@ -133,9 +133,9 @@ def train(
     # Lion is too hard.
     optimizer = torch.optim.AdamW(
         params=model.parameters(),
-        lr=training_config.learning_rate
+        lr=training_config.learning_rate,
         betas=tuple(training_config.adam_betas),
-        weight_decay=training_config.weight_decay
+        weight_decay=training_config.weight_decay,
     )
 
     learning_rate_scheduler = get_scheduler(
@@ -198,7 +198,7 @@ def train(
                     "validation_perplexity": validation_perplexity,
                     "learning_rate": current_learning_rate,
                     "epoch": epoch,
-                    "sampled_sequence": generated_sequence
+                    "sampled_sequence": generated_sequence,
                 }
             )
 
@@ -233,9 +233,6 @@ def start_training_run(file_path: str) -> None:
 
     total_params = sum(p.numel() for p in model.parameters())
 
-    import pdb
-
-    pdb.set_trace()
     print(f"Total parameters: {total_params}")
 
     train(accelerator=accelerator, model=model, training_config=training_config)

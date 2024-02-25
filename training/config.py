@@ -50,6 +50,7 @@ class TrainingConfig(BaseModel):
     gradient_accumulation_steps: int
     warmup_steps: int
     adam_betas: list[float] = Field(default=[0.9, 0.999], description="AdamW betas.")
+    weight_decay: float
 
     wandb: WandbConfig | None = Field(default=None, description="Using Wandb.")
     dataset_config: DatasetConfig

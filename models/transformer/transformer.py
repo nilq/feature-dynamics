@@ -8,6 +8,8 @@ import xformers.ops as xops
 from torch.nn import functional as F
 from models.transformer.encoding import RotaryPositionalEncoding
 
+from huggingface_hub import PyTorchModelHubMixin
+
 
 class Attention(nn.Module):
     def __init__(
@@ -42,7 +44,7 @@ class Attention(nn.Module):
         attention_output = einops.rearrange(
             attention_output, "b head l k -> b l (head k)"
         )
-        return self.out_transform(attention_output)
+        return self.out_transform(attention_output), attention_scores
 
 
 class FeedForward(nn.Module):
@@ -85,11 +87,13 @@ class TransformerBlock(nn.Module):
         self.feed_forward = FeedForward(input_dim=embedding_dim, hidden_dim=hidden_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        attention = self.attention(self.attention_norm(x))
-        after_attention = x + attention
-        return after_attention + self.feed_forward(
+        attention_output, attention_scores = self.attention(self.attention_norm(x))
+        after_attention = x + attention_output
+        output = after_attention + self.feed_forward(
             self.feed_forward_norm(after_attention)
         )
+
+        return output, attention_scores
 
 
 class Transformer(nn.Module):
@@ -123,9 +127,33 @@ class Transformer(nn.Module):
         )
         self.feed_forward = nn.Linear(embedding_dim, vocab_dim)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        output_attentions: bool = False,
+        output_hidden_states: bool = False,
+    ) -> torch.Tensor:
+        if output_hidden_states:
+            hidden_states = []
+
+        if output_attentions:
+            attentions = []
+
         x = self.positional_encoding(self.embedding(x))
         for block in self.blocks:
-            x = block(x)
+            x, attention_scores = block(x)
+
+            if output_hidden_states:
+                hidden_states.append(block)
+
+            if output_attentions:
+                attentions.append(attention_scores)
+
         x = self.feed_forward(x)
-        return F.log_softmax(x, dim=-1)
+        logits = F.log_softmax(x, dim=-1)
+
+        return (
+            logits,
+            hidden_states if output_hidden_states else None,
+            attentions if output_attentions else None,
+        )
