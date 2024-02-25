@@ -57,6 +57,7 @@ class TrainingConfig(BaseModel):
     transformer_config: TransformerConfig
 
     log_interval: int = Field(default=5000, description="Step interval to log training metrics at.")
+    sample_prompt: str = Field(default="hello", description="Prompt for generating samples every epoch.")
 
     @classmethod
     def from_toml_path(cls, file_path: str) -> Self:

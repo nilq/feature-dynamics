@@ -6,6 +6,7 @@ weight_decay = 0.1
 gradient_accumulation_steps = 16
 warmup_steps = 100
 adam_betas = [0.9, 0.95]
+sample_prompt = "Once upon a time"
 
 [training.wandb]
 project = "tiny-stories"

@@ -29,7 +29,7 @@ def sample_from_model(
     model: torch.nn.Module,
     accelerator: Accelerator,
     tokenizer: Tokenizer,
-    prompt: str = "hello",
+    prompt: str = "Once upon a time",
     max_length: int = 100,
 ):
     input_ids = tokenizer.encode(prompt, return_tensors="pt")
@@ -125,11 +125,14 @@ def train_epoch(
 def train(
     accelerator: Accelerator, model: torch.nn.Module, training_config: TrainingConfig
 ):
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Total parameters: {total_params:_}")
+
     if training_config.wandb:
         wandb.init(
             project=training_config.wandb.project,
             notes=training_config.wandb.notes,
-            tags=training_config.wandb.tags,
+            tags=training_config.wandb.tags + [f"{total_params / 1e6:.1f}M"],
             config=training_config.dict(),
         )
 
@@ -202,6 +205,7 @@ def train(
             model=model,
             accelerator=accelerator,
             tokenizer=tokenizer,
+            prompt=training_config.sample_prompt
         )
 
         print(f"Sample at {epoch} (val-perplexity {validation_perplexity}):", generated_sequence)
@@ -247,10 +251,6 @@ def start_training_run(file_path: str) -> None:
         num_layers=training_config.transformer_config.num_layers,
         num_heads=training_config.transformer_config.num_heads,
     )
-
-    total_params = sum(p.numel() for p in model.parameters())
-
-    print(f"Total parameters: {total_params}")
 
     train(accelerator=accelerator, model=model, training_config=training_config)
 
