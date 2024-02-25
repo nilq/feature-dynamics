@@ -80,6 +80,7 @@ def train_epoch(
     learning_rate_scheduler,
     completed_steps: int,
     max_train_steps: int,
+    log_interval: int = 5000,
 ):
     total_loss: float = 0
     criterion = torch.nn.CrossEntropyLoss()
@@ -102,6 +103,17 @@ def train_epoch(
 
         if accelerator.sync_gradients:
             completed_steps += 1
+
+            if completed_steps % log_interval == 0:
+                current_loss = total_loss / completed_steps
+                current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
+                if training_config.wandb:
+                    wandb.log({
+                        "step_loss": current_loss,
+                        "learning_rate": current_learning_rate,
+                        "step": completed_steps,
+                    })
+
 
         if completed_steps >= max_train_steps:
             break
@@ -129,6 +141,8 @@ def train(
         len(dataset_split.train) / training_config.gradient_accumulation_steps
     )
     max_train_steps = training_config.epochs * accumulation_steps_per_epoch
+
+    print("Max training steps:", max_train_steps)
 
     # Lion is too hard.
     optimizer = torch.optim.AdamW(
@@ -166,7 +180,6 @@ def train(
 
     for epoch in range(starting_epoch, training_config.epochs):
         model.train()
-
         completed_steps, mean_training_loss = train_epoch(
             model=model,
             accelerator=accelerator,
@@ -175,8 +188,10 @@ def train(
             learning_rate_scheduler=learning_rate_scheduler,
             completed_steps=completed_steps,
             max_train_steps=max_train_steps,
+            log_interval=training_config.log_interval
         )
 
+        model.eval()
         validation_perplexity = evaluate(
             model=model,
             accelerator=accelerator,
@@ -188,6 +203,8 @@ def train(
             accelerator=accelerator,
             tokenizer=tokenizer,
         )
+
+        print(f"Sample at {epoch} (val-perplexity {validation_perplexity}):", generated_sequence)
 
         if training_config.wandb:
             current_learning_rate = learning_rate_scheduler.get_last_lr()[0]

@@ -56,6 +56,8 @@ class TrainingConfig(BaseModel):
     dataset_config: DatasetConfig
     transformer_config: TransformerConfig
 
+    log_interval: int = Field(default=5000, description="Step interval to log training metrics at.")
+
     @classmethod
     def from_toml_path(cls, file_path: str) -> Self:
         """Loads the training configuration from a TOML file.
