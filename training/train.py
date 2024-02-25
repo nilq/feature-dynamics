@@ -94,7 +94,8 @@ def train_epoch(
     completed_steps: int,
     max_train_steps: int,
     use_wandb: bool,
-    log_interval: int = 5000,
+    log_interval: int = 500,
+    save_interval: int = 5000,
 ):
     total_loss: float = 0
     criterion = torch.nn.CrossEntropyLoss()
@@ -118,17 +119,17 @@ def train_epoch(
         if accelerator.sync_gradients:
             completed_steps += 1
 
-            if completed_steps % log_interval == 0 and accelerator.is_main_process:
-                current_loss = total_loss / completed_steps
-                current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
-
-                if use_wandb:
+            if use_wandb:
+                if completed_steps % log_interval == 0 and accelerator.is_main_process:
+                    current_loss = total_loss / completed_steps
+                    current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
                     wandb.log({
                         "step_loss": current_loss,
                         "learning_rate": current_learning_rate,
                         "step": completed_steps,
                     })
 
+                if completed_steps % save_interval == 0 and accelerator.is_main_process:
                     with tempfile.TemporaryDirectory() as checkpoint_dir:
                         accelerator.save_state(checkpoint_dir)
                         artifact = wandb.Artifact(f"model-checkpoint-{completed_steps}", type='model')

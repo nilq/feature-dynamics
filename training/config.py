@@ -56,7 +56,8 @@ class TrainingConfig(BaseModel):
     dataset_config: DatasetConfig
     transformer_config: TransformerConfig
 
-    log_interval: int = Field(default=5000, description="Step interval to log training metrics at.")
+    log_interval: int = Field(default=500, description="Step interval to log training metrics at.")
+    save_interval: int = Field(default=5000, description="Step interval to save training artifacts at.")
     sample_prompt: str = Field(default="hello", description="Prompt for generating samples every epoch.")
 
     @classmethod
