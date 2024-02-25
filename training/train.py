@@ -232,7 +232,7 @@ def train(
             accelerator=accelerator,
             tokenizer=tokenizer,
             prompt=training_config.sample_prompt,
-            max_length=training_config.transformer.max_seq_len
+            max_length=training_config.transformer_config.max_seq_len
         )
 
         print(f"Sample at {epoch} (val-perplexity {validation_perplexity}):", generated_sequence)
