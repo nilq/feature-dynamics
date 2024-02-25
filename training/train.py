@@ -150,7 +150,7 @@ def train(
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Total parameters: {total_params:_}")
 
-    if training_config.wandb:
+    if training_config.wandb and accelerator.is_main_process:
         wandb.init(
             project=training_config.wandb.project,
             notes=training_config.wandb.notes,
@@ -237,7 +237,7 @@ def train(
 
         print(f"Sample at {epoch} (val-perplexity {validation_perplexity}):", generated_sequence)
 
-        if training_config.wandb:
+        if training_config.wandb and accelerator.is_main_process:
             current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
 
             wandb.log(
@@ -253,7 +253,7 @@ def train(
             # Every epoch, save the MLP and attention weights.
             wandb_save_transformer_states(model=model, epoch=epoch)
 
-    if training_config.wandb:
+    if training_config.wandb and accelerator.is_main_process:
         accelerator.wait_for_everyone()
         unwrapped_model = accelerator.unwrap_model(model)
 

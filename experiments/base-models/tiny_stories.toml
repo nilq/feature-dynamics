@@ -18,7 +18,7 @@ dataset_id = "roneneldan/TinyStories"
 dataset_text_key = "text"
 tokenizer_id = "nilq/baby-tokenizer"
 batch_size = 64
-block_size = 128
+block_size = 512
 test_percentage = 0.15
 
 [training.transformer_config]
