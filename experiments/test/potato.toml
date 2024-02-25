@@ -1,0 +1,32 @@
+[training]
+epochs = 1
+learning_rate = 2e-3
+learning_rate_scheduler = "cosine"
+weight_decay = 0.1
+gradient_accumulation_steps = 1
+warmup_steps = 100
+adam_betas = [0.9, 0.95]
+sample_prompt = "hello"
+log_interval = 1
+
+[training.wandb]
+project = "test"
+notes = "Testing simple test run."
+tags = ["cpu", "quick test"]
+
+[training.dataset_config]
+dataset_id = "nilq/babylm-10M"
+dataset_text_key = "text"
+tokenizer_id = "nilq/baby-tokenizer-uncased"
+batch_size = 32
+validation_percentage = 0.2
+test_percentage = 0.1
+use_syntaxi = false
+block_size = 10
+
+[training.transformer_config]
+vocab_dim = 20001
+embedding_dim = 16
+max_seq_len = 10
+num_layers = 1
+num_heads = 8

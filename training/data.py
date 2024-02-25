@@ -25,6 +25,15 @@ class DatasetSplit:
     test: DataLoader
 
 
+def tokenizer_from_dataset_config(dataset_config: DatasetConfig) -> Tokenizer:
+    tokenizer = Tokenizer.from_pretrained(dataset_config.tokenizer_id)
+
+    # Patch using Syntaxi.
+    if dataset_config.use_syntaxi:
+        tokenizer = syntaxi.patched_tokenizer(tokenizer)
+
+    return tokenizer
+
 def datasplit_from_dataset_config(
     dataset_config: DatasetConfig,
     accelerator: Accelerator,
@@ -42,11 +51,7 @@ def datasplit_from_dataset_config(
         DatasetSplit: Dataset split into train, validation and test dataloaders.
     """
     # Load tokenizer.
-    tokenizer = Tokenizer.from_pretrained(dataset_config.tokenizer_id)
-
-    # Patch using Syntaxi.
-    if dataset_config.use_syntaxi:
-        tokenizer = syntaxi.patched_tokenizer(tokenizer)
+    tokenizer = tokenizer_from_dataset_config(dataset_config=dataset_config)
 
     raw_datasets = load_dataset(
         path=dataset_config.dataset_id, name=dataset_config.dataset_config_name

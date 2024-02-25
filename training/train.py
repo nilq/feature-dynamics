@@ -1,5 +1,7 @@
 """Train a model."""
 
+import os
+
 import typer
 import torch
 import math
@@ -15,7 +17,7 @@ from typing import Any
 from models.transformer import Transformer
 from training.artifacts import wandb_save_transformer_states
 
-from training.data import datasplit_from_dataset_config
+from training.data import datasplit_from_dataset_config, tokenizer_from_dataset_config
 from training.config import TrainingConfig
 
 from tokenizers import Tokenizer
@@ -24,21 +26,31 @@ from transformers import get_scheduler
 app = typer.Typer()
 
 
-@torch.no_grad
+@torch.no_grad()
 def sample_from_model(
     model: torch.nn.Module,
     accelerator: Accelerator,
     tokenizer: Tokenizer,
     prompt: str = "Once upon a time",
-    max_length: int = 100,
+    max_length: int = 10,
+    top_k: int = 50
 ):
-    input_ids = tokenizer.encode(prompt, return_tensors="pt")
+    input_ids = tokenizer.encode(prompt).ids
+    input_ids = torch.tensor(input_ids, dtype=torch.long).unsqueeze(0)
     input_ids = input_ids.to(accelerator.device)
 
-    with torch.no_grad():
-        outputs = model.generate(input_ids, max_length=max_length)
+    model.eval()
+    for _ in range(max_length):
+        logits, *_ = model(input_ids)
+        logits = logits[:, -1, :]
 
-    generated_sequence = "".join([tokenizer.decode(output) for output in outputs])
+        top_k_logits, top_k_indices = torch.topk(logits, top_k)
+        probabilities = torch.nn.functional.softmax(top_k_logits, dim=-1)
+
+        next_token = torch.multinomial(probabilities, num_samples=1)
+        input_ids = torch.cat([input_ids, next_token], dim=-1)
+
+    generated_sequence = tokenizer.decode(input_ids.squeeze().tolist())
     return generated_sequence
 
 
@@ -56,7 +68,7 @@ def evaluate(
         labels = input_ids[:, 1:]
         input_ids = input_ids[:, :-1]
 
-        logits = model(input_ids)
+        logits, *_ = model(input_ids)
         loss = criterion(logits.reshape(-1, logits.size(-1)), labels.reshape(-1))
         losses.append(accelerator.gather_for_metrics(loss.repeat(input_ids.size(0))))
 
@@ -80,6 +92,7 @@ def train_epoch(
     learning_rate_scheduler,
     completed_steps: int,
     max_train_steps: int,
+    use_wandb: bool,
     log_interval: int = 5000,
 ):
     total_loss: float = 0
@@ -108,21 +121,23 @@ def train_epoch(
                 current_loss = total_loss / completed_steps
                 current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
 
-                if training_config.wandb:
+                if use_wandb:
                     wandb.log({
                         "step_loss": current_loss,
                         "learning_rate": current_learning_rate,
                         "step": completed_steps,
                     })
 
-                    with tempfile.TemporaryDirectory(delete=False) as checkpoint_dir:
-                        accelerator.save_state(checkpoint_dir.name)
+                    with tempfile.TemporaryDirectory() as checkpoint_dir:
+                        accelerator.save_state(checkpoint_dir)
                         artifact = wandb.Artifact(f"model-checkpoint-{completed_steps}", type='model')
-                        artifact.add_dir(checkpoint_dir.name)
+                        artifact.add_dir(checkpoint_dir)
                         wandb.log_artifact(artifact)
 
-
         if completed_steps >= max_train_steps:
+            break
+        
+        if os.getenv("TEST"):
             break
 
     mean_loss = total_loss / len(data_loader)
@@ -188,6 +203,9 @@ def train(
     starting_epoch: int = 0
     completed_steps: int = 0
 
+    # For sample generation.
+    tokenizer = tokenizer_from_dataset_config(dataset_config=training_config.dataset_config)
+
     for epoch in range(starting_epoch, training_config.epochs):
         model.train()
         completed_steps, mean_training_loss = train_epoch(
@@ -198,6 +216,7 @@ def train(
             learning_rate_scheduler=learning_rate_scheduler,
             completed_steps=completed_steps,
             max_train_steps=max_train_steps,
+            use_wandb=training_config.wandb is not None,
             log_interval=training_config.log_interval
         )
 
