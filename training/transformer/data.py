@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from transformers import default_data_collator
 
-from training.config import DatasetConfig
+from training.transformer.config import DatasetConfig, TrainingConfig
 from torch.utils.data import DataLoader
 
 
@@ -21,7 +21,7 @@ logger = structlog.get_logger(__name__)
 class DatasetSplit:
     train: DataLoader
     validation: DataLoader
-    test: DataLoader
+    # test: DataLoader
 
 
 def tokenizer_from_dataset_config(dataset_config: DatasetConfig) -> Tokenizer:
@@ -36,19 +36,19 @@ def tokenizer_from_dataset_config(dataset_config: DatasetConfig) -> Tokenizer:
 
 def datasplit_from_dataset_config(
     dataset_config: DatasetConfig,
-    main_process_first,
+    training_config: TrainingConfig,
     num_processing_workers: int | None = None,
 ) -> DatasetSplit:
     """Get split dataloaders from dataset config.
 
     Args:
         dataset_config (DatasetConfig): Dataset loading and processing configuration.
-        main_process_first (...): Context manager for doing things on main process first.
+        training_config (TrainingConfig): With context manager for doing things on main process first.
         num_processing_workers (int | None, optional): Number of preprocessing workers.
             Defaults to None.
 
     Returns:
-        DatasetSplit: Dataset split into train, validation and test dataloaders.
+        tuple[Dataset]: Datasets for train and validation.
     """
     # Load tokenizer.
     tokenizer = tokenizer_from_dataset_config(dataset_config=dataset_config)
@@ -59,28 +59,31 @@ def datasplit_from_dataset_config(
 
     if list(raw_datasets) == ["train"]:
         logger.info("Only training set available. Slicing it up.")
+        validation_split = f"train[:{int(dataset_config.validation_percentage * 100)}%]" if not dataset_config.test_mode else "train[:10]"
+        training_split = f"train[{int(dataset_config.validation_percentage * 100)}%:]" if not dataset_config.test_mode else "train[10:30]"
+
         raw_datasets["validation"] = load_dataset(
             path=dataset_config.dataset_id,
             name=dataset_config.dataset_config_name,
-            split=(f"train[:{int(dataset_config.validation_percentage * 100)}%]"),
+            split=validation_split,
         )
 
         raw_datasets["train"] = load_dataset(
             path=dataset_config.dataset_id,
             name=dataset_config.dataset_config_name,
-            split=f"train[{int(dataset_config.validation_percentage * 100)}%:]",
+            split=training_split,
         )
     else:
         raw_datasets["train"] = load_dataset(
             path=dataset_config.dataset_id,
             name=dataset_config.dataset_config_name,
-            split="train",
+            split="train" if not dataset_config.test_mode else "train[:20]",
         )
 
         raw_datasets["validation"] = load_dataset(
             path=dataset_config.dataset_id,
             name=dataset_config.dataset_config_name,
-            split="validation",
+            split="validation" if not dataset_config.test_mode else "validation[:10]",
         )
 
     def tokenize(examples, text_key: str = dataset_config.dataset_text_key):
@@ -88,7 +91,7 @@ def datasplit_from_dataset_config(
             "input_ids": [tokenizer.encode(text).ids for text in examples[text_key]]
         }
 
-    with main_process_first:
+    with training_config.main_process_first():
         tokenized_datasets = raw_datasets.map(
             function=tokenize,
             batched=True,
@@ -117,7 +120,7 @@ def datasplit_from_dataset_config(
 
         return result
 
-    with main_process_first():
+    with training_config.main_process_first():
         blocked_datasets = tokenized_datasets.map(
             function=block_concatenate_texts,
             batched=True,
@@ -126,21 +129,7 @@ def datasplit_from_dataset_config(
             desc=f"Chunking tokenized dataset into chunks of {block_size} tokens",
         )
 
-    train_val_test: tuple[Dataset] = (
+    return (
         blocked_datasets["train"],
         blocked_datasets["validation"],
-        blocked_datasets["test"],
     )
-
-    dataloaders: DataLoader = [
-        DataLoader(
-            dataset=dataset,
-            shuffle=(i == 0),  # Only train.
-            collate_fn=default_data_collator,
-            batch_size=dataset_config.batch_size,
-        )
-        for i, dataset in enumerate(train_val_test)
-    ]
-
-    train, validation, test = dataloaders
-    return DatasetSplit(train=train, validation=validation, test=test)

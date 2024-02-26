@@ -22,10 +22,3 @@ tokenizer_id = "nilq/baby-tokenizer"
 batch_size = 64
 block_size = 512
 test_percentage = 0.15
-
-[training.transformer_config]
-vocab_dim = 20001
-embedding_dim = 1024
-max_seq_len = 512
-num_layers = 1
-num_heads = 16

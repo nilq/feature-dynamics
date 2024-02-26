@@ -30,7 +30,6 @@ class WandbConfig(BaseModel):
     project: str = Field(..., description="Name of Wandb project.")
     notes: str = Field(..., description="Notes for run.")
     tags: list[str] = Field(..., description="List of tags for run.")
-    logging_steps: int = Field(default=1, description="Logging interval in steps.")
 
 
 class DatasetConfig(BaseModel):
@@ -54,6 +53,10 @@ class DatasetConfig(BaseModel):
         default=True, description="Whether to use Syntaxi'ed tokenizer."
     )
 
+    test_mode: bool = Field(
+        default=False, description="Whether to load a very tiny fraction for dry-run test."
+    )
+
 
 @dataclass
 class TrainingConfig(TrainingArguments):
@@ -65,6 +68,10 @@ class TrainingConfig(TrainingArguments):
     )
     model_config: ModelConfig = Field(
         ..., description="Configuration of model to train."
+    )
+
+    gradient_accumulation_steps: int = Field(
+        default=1, description="Number of gradient accumulation steps."
     )
 
     @classmethod

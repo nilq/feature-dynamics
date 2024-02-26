@@ -1,0 +1,28 @@
+[training]
+epochs = 1
+learning_rate = 5e-4
+learning_rate_scheduler = "cosine"
+weight_decay = 0.1
+gradient_accumulation_steps = 1
+warmup_steps = 0
+adam_beta1 = 0.9
+adam_beta2 = 0.999
+output_dir = "./"
+logging_steps = 1
+
+[training.model_config]
+model_type = "gpt2"
+model_config_overrides = { n_embd=64, n_layer=1, n_head=16 }
+
+[training.wandb]
+project = "test"
+notes = "Dry-run."
+tags = ["transformer", "1L"]
+
+[training.dataset_config]
+dataset_id = "roneneldan/TinyStories"
+dataset_text_key = "text"
+tokenizer_id = "gpt2"
+batch_size = 2
+block_size = 1024
+test_mode = true
