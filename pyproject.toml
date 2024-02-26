@@ -26,6 +26,7 @@ black = "^24.2.0"
 huggingface-hub = "^0.20.3"
 typer = "^0.9.0"
 structlog = "^24.1.0"
+evaluate = "^0.4.1"
 
 
 [build-system]

@@ -1,4 +1,10 @@
-"""Train a model."""
+"""Train a model.
+
+Prior to migration to the high-level Trainer, this was
+used to train handrolled transformers.
+
+It will be transformed to train sparse autoencoders.
+"""
 
 import os
 

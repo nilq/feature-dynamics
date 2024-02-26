@@ -36,14 +36,14 @@ def tokenizer_from_dataset_config(dataset_config: DatasetConfig) -> Tokenizer:
 
 def datasplit_from_dataset_config(
     dataset_config: DatasetConfig,
-    accelerator: Accelerator,
+    main_process_first,
     num_processing_workers: int | None = None,
 ) -> DatasetSplit:
     """Get split dataloaders from dataset config.
 
     Args:
         dataset_config (DatasetConfig): Dataset loading and processing configuration.
-        accelerator (Accelerator): Accelerator to use for processing.
+        main_process_first (...): Context manager for doing things on main process first.
         num_processing_workers (int | None, optional): Number of preprocessing workers.
             Defaults to None.
 
@@ -57,34 +57,21 @@ def datasplit_from_dataset_config(
         path=dataset_config.dataset_id, name=dataset_config.dataset_config_name
     )
 
-    # Determine where to cut datasets.
-    end_of_validation: float = (
-        dataset_config.test_percentage + dataset_config.validation_percentage
-    )
 
     if list(raw_datasets) == ["train"]:
         logger.info("Only training set available. Slicing it up.")
-
-        # Load datasets using complicated fraction mathematics.
-        raw_datasets["test"] = load_dataset(
-            path=dataset_config.dataset_id,
-            name=dataset_config.dataset_config_name,
-            split=f"train[:{int(dataset_config.test_percentage * 100)}%]",
-        )
-
         raw_datasets["validation"] = load_dataset(
             path=dataset_config.dataset_id,
             name=dataset_config.dataset_config_name,
             split=(
-                f"train[{int(dataset_config.test_percentage * 100)}%:"
-                f"{int(end_of_validation * 100)}%]"
+                f"train[:{int(dataset_config.validation_percentage * 100)}%]"
             ),
         )
 
         raw_datasets["train"] = load_dataset(
             path=dataset_config.dataset_id,
             name=dataset_config.dataset_config_name,
-            split=f"train[{int(end_of_validation * 100)}%:]",
+            split=f"train[{int(dataset_config.validation_percentage * 100)}%:]",
         )
     else:
         raw_datasets["train"] = load_dataset(
@@ -99,41 +86,18 @@ def datasplit_from_dataset_config(
             split="validation",
         )
 
-        if "test" in raw_datasets and False:
-            raw_datasets["test"] = load_dataset(
-                path=dataset_config.dataset_id,
-                name=dataset_config.dataset_config_name,
-                split="test",
-            )
-        elif False:
-            logger.info("No test set found. Taking a piece of validation.")
-
-            raw_datasets["test"] = load_dataset(
-                path=dataset_config.dataset_id,
-                name=dataset_config.dataset_config_name,
-                split=f"validation[:{int(dataset_config.test_percentage * 100)}%]",
-            )
-
-            raw_datasets["validation"] = load_dataset(
-                path=dataset_config.dataset_id,
-                name=dataset_config.dataset_config_name,
-                split=(
-                    f"validation[{int(dataset_config.test_percentage * 100)}%:]"
-                ),
-            )
-
     def tokenize(examples, text_key: str = dataset_config.dataset_text_key):
         return {
             "input_ids": [tokenizer.encode(text).ids for text in examples[text_key]]
         }
 
-    with accelerator.main_process_first():
+    with main_process_first:
         tokenized_datasets = raw_datasets.map(
             function=tokenize,
             batched=True,
             num_proc=num_processing_workers,
             remove_columns=raw_datasets["train"].column_names,
-            desc="Tokenizing all of the data.",
+            desc="Tokenizing all of the data",
         )
 
     block_size: int = dataset_config.block_size
@@ -162,7 +126,7 @@ def datasplit_from_dataset_config(
             batched=True,
             num_proc=num_processing_workers,
             remove_columns=tokenized_datasets["train"].column_names,
-            desc=f"Chunking tokenized dataset into chunks of {block_size} tokens.",
+            desc=f"Chunking tokenized dataset into chunks of {block_size} tokens",
         )
 
     train_val_test: tuple[Dataset] = (
