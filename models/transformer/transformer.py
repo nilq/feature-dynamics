@@ -3,12 +3,10 @@
 import einops
 import torch
 import torch.nn as nn
-import xformers.ops as xops
 
 from torch.nn import functional as F
 from models.transformer.encoding import RotaryPositionalEncoding
 
-from huggingface_hub import PyTorchModelHubMixin
 
 
 class Attention(nn.Module):
@@ -84,8 +82,8 @@ class TransformerBlock(nn.Module):
         embedding_dim: int,
         hidden_dim: int,
         norm_epsilon: float = 1e-6,
-        dropout_rate: float,
-        attention_dropout_rate: float,
+        dropout_rate: float = 0.1,
+        attention_dropout_rate: float = 0.1,
     ) -> None:
         super().__init__()
         self.attention = Attention(embedding_dim=embedding_dim, num_heads=num_heads, dropout_rate=attention_dropout_rate)

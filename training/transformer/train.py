@@ -6,10 +6,19 @@ import evaluate
 import typer
 import wandb
 
-from transformers import AutoModelForCausalLM, CONFIG_MAPPING, Trainer, default_data_collator
+from transformers import (
+    AutoModelForCausalLM,
+    CONFIG_MAPPING,
+    Trainer,
+    default_data_collator,
+)
 
 from training.transformer.config import TrainingConfig
-from training.transformer.data import DatasetSplit, datasplit_from_dataset_config, tokenizer_from_dataset_config
+from training.transformer.data import (
+    DatasetSplit,
+    datasplit_from_dataset_config,
+    tokenizer_from_dataset_config,
+)
 from transformers.trainer_utils import get_last_checkpoint
 
 from typing import Any
@@ -26,18 +35,21 @@ def train(config_path: str) -> None:
     training_config = TrainingConfig.from_toml_path(file_path=config_path)
     trainer_kwargs: dict[str, Any] = {}
 
-    if not (model_config_cls := CONFIG_MAPPING.get(training_config.model_config.model_type)):
-        raise ValueError("No such model type `{training_config.model_config.model_type}.")
+    if not (
+        model_config_cls := CONFIG_MAPPING.get(training_config.model_config.model_type)
+    ):
+        raise ValueError(
+            "No such model type `{training_config.model_config.model_type}."
+        )
 
     model_config = model_config_cls()
-    
+
     if overrides := training_config.model_config.model_config_overrides:
         model_config.update(config_dict=overrides)
 
     tokenizer = tokenizer_from_dataset_config(training_config.dataset_config)
     model = AutoModelForCausalLM.from_config(
-        config=model_config,
-        trust_remote_code=True
+        config=model_config, trust_remote_code=True
     )
 
     num_params: int = sum(p.numel() for p in model.parameters())
@@ -61,7 +73,6 @@ def train(config_path: str) -> None:
         trainer_kwargs["report_to"] = "wandb"
         trainer_kwargs["logging_steps"] = training_config.wandb.logging_steps
 
-
     # Helper for processing raw logits.
     def preprocess_logits_for_metrics(logits, labels):
         if isinstance(logits, tuple):
@@ -83,13 +94,17 @@ def train(config_path: str) -> None:
         args=training_config,
         training_config=dataset_split.train,
         eval_dataset=dataset_split.validation,
+        tokenizer=tokenizer,
         data_collator=default_data_collator,
         compute_metrics=compute_metrics,
-        preprocess_logits_for_metrics=preprocess_logits_for_metrics
-        **trainer_kwargs
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics**trainer_kwargs,
     )
 
-    last_checkpoint_maybe = get_last_checkpoint(training_config.output_dir) if training_config.resume_from_checkpoint else None
+    last_checkpoint_maybe = (
+        get_last_checkpoint(training_config.output_dir)
+        if training_config.resume_from_checkpoint
+        else None
+    )
     train_result = trainer.train(resume_from_checkpoint=last_checkpoint_maybe)
     trainer.save_model()
 
@@ -115,8 +130,8 @@ def train(config_path: str) -> None:
     if training_config.push_to_hub:
         trainer.push_to_hub(
             dataset_tags=training_config.dataset_config.dataset_id,
-            dataset=f"{training_config.dataset_config.dataset_id}"
-            tasks="text-generation"
+            dataset=f"{training_config.dataset_config.dataset_id}",
+            tasks="text-generation",
         )
 
 

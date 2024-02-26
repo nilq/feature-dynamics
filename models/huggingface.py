@@ -7,6 +7,7 @@ from transformers.modeling_outputs import CausalLMOutput
 
 from models.transformer import Transformer
 
+
 class TransformerConfig(PretrainedConfig):
     """Pretty generic transformer config."""
 

@@ -12,13 +12,11 @@ import typer
 import torch
 import math
 import wandb
-import numpy as np
 import tempfile
 
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
-from typing import Any
 
 from models.transformer import Transformer
 from training.artifacts import wandb_save_transformer_states
@@ -39,7 +37,7 @@ def sample_from_model(
     tokenizer: Tokenizer,
     prompt: str = "Once upon a time",
     max_length: int = 10,
-    top_k: int = 50
+    top_k: int = 50,
 ):
     input_ids = tokenizer.encode(prompt).ids
     input_ids = torch.tensor(input_ids, dtype=torch.long).unsqueeze(0)
@@ -129,22 +127,26 @@ def train_epoch(
                 if completed_steps % log_interval == 0 and accelerator.is_main_process:
                     current_loss = total_loss / completed_steps
                     current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
-                    wandb.log({
-                        "step_loss": current_loss,
-                        "learning_rate": current_learning_rate,
-                        "step": completed_steps,
-                    })
+                    wandb.log(
+                        {
+                            "step_loss": current_loss,
+                            "learning_rate": current_learning_rate,
+                            "step": completed_steps,
+                        }
+                    )
 
                 if completed_steps % save_interval == 0 and accelerator.is_main_process:
                     with tempfile.TemporaryDirectory() as checkpoint_dir:
                         accelerator.save_state(checkpoint_dir)
-                        artifact = wandb.Artifact(f"model-checkpoint-{completed_steps}", type='model')
+                        artifact = wandb.Artifact(
+                            f"model-checkpoint-{completed_steps}", type="model"
+                        )
                         artifact.add_dir(checkpoint_dir)
                         wandb.log_artifact(artifact)
 
         if completed_steps >= max_train_steps:
             break
-        
+
         if os.getenv("TEST"):
             break
 
@@ -206,19 +208,26 @@ def train(
         learning_rate_scheduler,
     )
 
-
-    num_steps_per_epoch: int = math.ceil(len(dataset_split.train) / training_config.gradient_accumulation_steps)
+    num_steps_per_epoch: int = math.ceil(
+        len(dataset_split.train) / training_config.gradient_accumulation_steps
+    )
 
     max_train_steps = training_config.epochs * num_steps_per_epoch
 
     print("Max training steps:", max_train_steps)
-    print("Total batch size:", training_config.gradient_accumulation_steps * training_config.dataset_config.batch_size) 
+    print(
+        "Total batch size:",
+        training_config.gradient_accumulation_steps
+        * training_config.dataset_config.batch_size,
+    )
 
     starting_epoch: int = 0
     completed_steps: int = 0
 
     # For sample generation.
-    tokenizer = tokenizer_from_dataset_config(dataset_config=training_config.dataset_config)
+    tokenizer = tokenizer_from_dataset_config(
+        dataset_config=training_config.dataset_config
+    )
 
     for epoch in range(starting_epoch, training_config.epochs):
         model.train()
@@ -231,7 +240,7 @@ def train(
             completed_steps=completed_steps,
             max_train_steps=max_train_steps,
             use_wandb=training_config.wandb is not None,
-            log_interval=training_config.log_interval
+            log_interval=training_config.log_interval,
         )
 
         model.eval()
@@ -241,17 +250,19 @@ def train(
             data_loader=dataset_split.validation,
         )
 
-
         if accelerator.is_main_process:
             generated_sequence = sample_from_model(
                 model=model,
                 accelerator=accelerator,
                 tokenizer=tokenizer,
                 prompt=training_config.sample_prompt,
-                max_length=training_config.transformer_config.max_seq_len
+                max_length=training_config.transformer_config.max_seq_len,
             )
 
-            print(f"Sample at {epoch} (val-perplexity {validation_perplexity}):", generated_sequence)
+            print(
+                f"Sample at {epoch} (val-perplexity {validation_perplexity}):",
+                generated_sequence,
+            )
 
             if training_config.wandb:
                 current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
@@ -263,9 +274,9 @@ def train(
                         "learning_rate": current_learning_rate,
                         "epoch": epoch,
                         "sampled_sequence": generated_sequence,
-                        "step": completed_steps
+                        "step": completed_steps,
                     },
-                    step=completed_steps
+                    step=completed_steps,
                 )
 
                 # Every epoch, save the MLP and attention weights.

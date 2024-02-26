@@ -13,9 +13,18 @@ from typing import Any, Literal
 
 class ModelConfig(BaseModel):
     """Model configurations."""
-    model_type: str = Field(..., description="Name of autoregressive model supported by HuggingFace transformers ")
-    model_config_overrides: dict[str, Any] | None = Field(default=None, description="Overriding model configuration settings.")
-    torch_dtype: Literal["auto", "bfloat16", "float16", "float32"] | None = Field(default=None, description="Overriding PyTorch default dtype.")
+
+    model_type: str = Field(
+        ...,
+        description="Name of autoregressive model supported by HuggingFace transformers ",
+    )
+    model_config_overrides: dict[str, Any] | None = Field(
+        default=None, description="Overriding model configuration settings."
+    )
+    torch_dtype: Literal["auto", "bfloat16", "float16", "float32"] | None = Field(
+        default=None, description="Overriding PyTorch default dtype."
+    )
+
 
 class WandbConfig(BaseModel):
     project: str = Field(..., description="Name of Wandb project.")
@@ -26,6 +35,7 @@ class WandbConfig(BaseModel):
 
 class DatasetConfig(BaseModel):
     """Configuration of datasets and data loading."""
+
     dataset_id: str = Field(..., description="Name of HuggingFace dataset.")
     dataset_config_name: str | None = Field(
         default=None, description="Name of dataset config."
@@ -47,9 +57,15 @@ class DatasetConfig(BaseModel):
 
 @dataclass
 class TrainingConfig(TrainingArguments):
-    wandb: WandbConfig | None = Field(default=None, description="Configuration of Weights & Biases.")
-    dataset_config: DatasetConfig = Field(..., description="Dataset and data loading configuration.")
-    model_config: ModelConfig = Field(..., description="Configuration of model to train.")
+    wandb: WandbConfig | None = Field(
+        default=None, description="Configuration of Weights & Biases."
+    )
+    dataset_config: DatasetConfig = Field(
+        ..., description="Dataset and data loading configuration."
+    )
+    model_config: ModelConfig = Field(
+        ..., description="Configuration of model to train."
+    )
 
     @classmethod
     def from_toml_path(cls, file_path: str) -> Self:

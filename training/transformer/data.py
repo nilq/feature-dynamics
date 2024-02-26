@@ -8,7 +8,6 @@ from datasets import load_dataset, Dataset
 from tokenizers import Tokenizer
 from dataclasses import dataclass
 
-from accelerate import Accelerator
 from transformers import default_data_collator
 
 from training.config import DatasetConfig
@@ -34,6 +33,7 @@ def tokenizer_from_dataset_config(dataset_config: DatasetConfig) -> Tokenizer:
 
     return tokenizer
 
+
 def datasplit_from_dataset_config(
     dataset_config: DatasetConfig,
     main_process_first,
@@ -57,15 +57,12 @@ def datasplit_from_dataset_config(
         path=dataset_config.dataset_id, name=dataset_config.dataset_config_name
     )
 
-
     if list(raw_datasets) == ["train"]:
         logger.info("Only training set available. Slicing it up.")
         raw_datasets["validation"] = load_dataset(
             path=dataset_config.dataset_id,
             name=dataset_config.dataset_config_name,
-            split=(
-                f"train[:{int(dataset_config.validation_percentage * 100)}%]"
-            ),
+            split=(f"train[:{int(dataset_config.validation_percentage * 100)}%]"),
         )
 
         raw_datasets["train"] = load_dataset(
@@ -120,7 +117,7 @@ def datasplit_from_dataset_config(
 
         return result
 
-    with accelerator.main_process_first():
+    with main_process_first():
         blocked_datasets = tokenized_datasets.map(
             function=block_concatenate_texts,
             batched=True,

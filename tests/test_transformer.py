@@ -1,4 +1,3 @@
-import pytest
 
 from models.transformer import Transformer
 import torch
