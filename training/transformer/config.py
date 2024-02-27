@@ -42,7 +42,6 @@ class DatasetConfig(BaseModel):
     dataset_text_key: str = Field(..., description="Where to find the text data.")
 
     tokenizer_id: str = Field(..., description="ID of HuggingFace tokenizer.")
-    batch_size: int = Field(..., description="Batch size.")
     block_size: int = Field(
         default=1024, description="Tokenized sequence length of blocks."
     )

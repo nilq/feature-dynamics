@@ -77,13 +77,13 @@ def datasplit_from_dataset_config(
         raw_datasets["train"] = load_dataset(
             path=dataset_config.dataset_id,
             name=dataset_config.dataset_config_name,
-            split="train" if not dataset_config.test_mode else "train[:20]",
+            split="train" if not dataset_config.test_mode else "train[:1%]",
         )
 
         raw_datasets["validation"] = load_dataset(
             path=dataset_config.dataset_id,
             name=dataset_config.dataset_config_name,
-            split="validation" if not dataset_config.test_mode else "validation[:10]",
+            split="validation" if not dataset_config.test_mode else "validation[:1%]",
         )
 
     def tokenize(examples, text_key: str = dataset_config.dataset_text_key):

@@ -23,6 +23,5 @@ tags = ["transformer", "1L"]
 dataset_id = "roneneldan/TinyStories"
 dataset_text_key = "text"
 tokenizer_id = "gpt2"
-batch_size = 2
 block_size = 1024
 test_mode = true

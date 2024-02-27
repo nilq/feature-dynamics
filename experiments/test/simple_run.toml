@@ -15,7 +15,6 @@ tags = ["amazing", "cool test"]
 dataset_id = "nilq/babylm-100M"
 dataset_text_key = "text"
 tokenizer_id = "nilq/baby-tokenizer-uncased"
-batch_size = 32
 validation_percentage = 0.2
 test_percentage = 0.1
 use_syntaxi = false

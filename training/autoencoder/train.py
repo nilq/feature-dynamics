@@ -218,7 +218,7 @@ def train(
     print(
         "Total batch size:",
         training_config.gradient_accumulation_steps
-        * training_config.dataset_config.batch_size,
+        * training_config.batch_size,
     )
 
     starting_epoch: int = 0
