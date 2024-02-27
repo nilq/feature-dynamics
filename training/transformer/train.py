@@ -5,6 +5,7 @@ import math
 import evaluate
 import typer
 import wandb
+import torch
 
 from datasets import Dataset
 from transformers import (
@@ -13,6 +14,7 @@ from transformers import (
     Trainer,
     default_data_collator,
     set_seed,
+    PreTrainedTokenizerFast
 )
 
 from training.transformer.config import TrainingConfig
@@ -41,9 +43,16 @@ def train(config_path: str) -> None:
     if overrides := training_config.model_config.model_config_overrides:
         model_config.update(config_dict=overrides)
 
-    tokenizer = tokenizer_from_dataset_config(training_config.dataset_config)
+    tokenizer = PreTrainedTokenizerFast(
+        tokenizer_object=tokenizer_from_dataset_config(training_config.dataset_config)
+    )
+    torch_dtype = (
+        model_config.torch_dtype
+        if model_config.torch_dtype in ["auto", None]
+        else getattr(torch, model_config.torch_dtype)
+    )
     model = AutoModelForCausalLM.from_config(
-        config=model_config, trust_remote_code=True
+        config=model_config, trust_remote_code=True, torch_dtype=model_config.torch_dtype
     )
 
     num_params: int = sum(p.numel() for p in model.parameters())
@@ -76,7 +85,7 @@ def train(config_path: str) -> None:
         return logits.argmax(dim=-1)
 
     # Everyone's favourite metric.
-    metric = evaluate.load("perplexity")
+    metric = evaluate.load("accuracy")
 
     # This is how we compute metrics during training.
     def compute_metrics(eval_preds):
@@ -84,6 +93,9 @@ def train(config_path: str) -> None:
         labels = labels[:, 1:].reshape(-1)
         preds = preds[:, :-1].reshape(-1)
         return metric.compute(predictions=preds, references=labels)
+
+    import ipdb
+    ipdb.set_trace()
 
     trainer = Trainer(
         model=model,
@@ -105,13 +117,13 @@ def train(config_path: str) -> None:
     trainer.save_model()
 
     metrics_training = train_result.metrics
-    metrics_training["train_samples"] = len(dataset_split.train)
+    metrics_training["train_samples"] = len(training_dataset)
 
     trainer.log_metrics("train", metrics_training)
     trainer.save_state()
 
     metrics_eval = trainer.evaluate()
-    metrics_eval["eval_samples"] = len(dataset_split.train)
+    metrics_eval["eval_samples"] = len(validation_dataset)
 
     try:
         perplexity = math.exp(metrics_eval["eval_loss"])
@@ -133,3 +145,4 @@ def train(config_path: str) -> None:
 
 if __name__ == "__main__":
     typer.run(train)
+
