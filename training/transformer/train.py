@@ -46,14 +46,11 @@ def train(config_path: str) -> None:
     tokenizer = PreTrainedTokenizerFast(
         tokenizer_object=tokenizer_from_dataset_config(training_config.dataset_config)
     )
-<<<<<<< HEAD
     torch_dtype = (
         model_config.torch_dtype
         if model_config.torch_dtype in ["auto", None]
         else getattr(torch, model_config.torch_dtype)
     )
-=======
->>>>>>> aafc7d2 (PreTrainedTokenizerFast wrapper.)
     model = AutoModelForCausalLM.from_config(
         config=model_config, trust_remote_code=True, torch_dtype=model_config.torch_dtype
     )
