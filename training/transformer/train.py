@@ -52,7 +52,7 @@ def train(config_path: str) -> None:
         else getattr(torch, model_config.torch_dtype)
     )
     model = AutoModelForCausalLM.from_config(
-        config=model_config, trust_remote_code=True, torch_dtype=model_config.torch_dtype
+        config=model_config, trust_remote_code=True, torch_dtype=torch_dtype
     )
 
     num_params: int = sum(p.numel() for p in model.parameters())
@@ -93,9 +93,6 @@ def train(config_path: str) -> None:
         labels = labels[:, 1:].reshape(-1)
         preds = preds[:, :-1].reshape(-1)
         return metric.compute(predictions=preds, references=labels)
-
-    import ipdb
-    ipdb.set_trace()
 
     trainer = Trainer(
         model=model,

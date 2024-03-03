@@ -1,0 +1,9 @@
+models:
+  - model: nilq/mistral-1L-tiny
+    parameters:
+      weight: 0.5
+  - model: nilq/lua-mistral-1L-tiny
+    parameters:
+      weight: 0.5
+merge_method: linear
+dtype: float32

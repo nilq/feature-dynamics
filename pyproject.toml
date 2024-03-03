@@ -28,6 +28,8 @@ typer = "^0.9.0"
 structlog = "^24.1.0"
 evaluate = "^0.4.1"
 ruff = "^0.2.2"
+mergekit = {path = "../mergekit"}
+ipdb = "^0.13.13"
 
 
 [build-system]

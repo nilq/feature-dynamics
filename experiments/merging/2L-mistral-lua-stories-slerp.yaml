@@ -1,0 +1,9 @@
+models:
+  - model: nilq/lua-mistral-2L-tiny
+  - model: nilq/mistral-2L-tiny
+merge_method: slerp
+base_model: nilq/mistral-2L-tiny
+parameters:
+  t:
+    - value: 0.8
+dtype: float16

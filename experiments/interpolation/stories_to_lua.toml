@@ -1,0 +1,18 @@
+[slerp]
+model_a = "nilq/mistral-1L-tiny"
+model_b = "nilq/lua-mistral-1L-tiny"
+stride = 0.25
+
+[slerp.dataset_a]
+dataset_id = "roneneldan/TinyStories"
+dataset_text_key = "text"
+tokenizer_id = "mistralai/Mistral-7B-v0.1"
+block_size = 256
+use_syntaxi = false
+
+[slerp.dataset_b]
+dataset_id = "nilq/small-lua-stack"
+dataset_text_key = "content"
+tokenizer_id = "mistralai/Mistral-7B-v0.1"
+block_size = 256
+use_syntaxi = false
