@@ -14,36 +14,53 @@ from accelerate import Accelerator
 from transformers import AutoModelForCausalLM
 from torch.utils.data import DataLoader
 
+import torch.nn.functional as F
+import torch
+
 from training.transformer.data import datasplit_from_dataset_config
+
+from transformers import Trainer, TrainingArguments, default_data_collator, AutoTokenizer
+import evaluate
 
 app = typer.Typer()
 
-def evaluate_model_on_dataset(model: AutoModelForCausalLM, dataset: DataLoader, device="cpu") -> dict[str, float]:
+def evaluate_model_on_dataset(model: AutoModelForCausalLM, dataset: DataLoader, device="cuda") -> dict[str, float]:
     """Evaluate model on dataset.
     """
-    model.to(device)
-    model.eval()
+    def preprocess_logits_for_metrics(logits, labels):
+        if isinstance(logits, tuple):
+            logits = logits[0]
+        return logits.argmax(dim=-1)
 
-    total_loss = 0.0
-    total_samples = 0
+    # Everyone's favourite metric.
+    metric = evaluate.load("accuracy")
 
-    with torch.no_grad():
-        for batch in dataset:
-            inputs = torch.tensor(batch["input_ids"])
-            labels = torch.tensor(batch["labels"])
+    # This is how we compute metrics during training.
+    def compute_metrics(eval_preds):
+        preds, labels = eval_preds
+        labels = labels[:, 1:].reshape(-1)
+        preds = preds[:, :-1].reshape(-1)
+        return metric.compute(predictions=preds, references=labels)
 
-            outputs = model(input_ids=inputs.unsqueeze(-1), labels=labels.unsqueeze(-1))
-            loss = outputs.loss
+    training_args = TrainingArguments(output_dir="./results", do_train=False, do_eval=True)
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        eval_dataset=dataset,
+        tokenizer=AutoTokenizer.from_pretrained("nilq/mistral-1L-tiny"),
+        data_collator=default_data_collator,
+        compute_metrics=compute_metrics,
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+    )
 
-            total_loss += loss.item() * inputs.size(0)
-            total_samples += inputs.size(0)
+    eval_results = trainer.evaluate()
 
-    average_loss = total_loss / total_samples
-    perplexity = torch.exp(torch.tensor(average_loss))
-
-    return {
-        "perplexity": perplexity.item(),
+    result = {
+        "loss": eval_results["eval_loss"],
+        "accuracy": eval_results["eval_accuracy"]
     }
+
+    return result
 
 
 def slerp(
@@ -62,7 +79,20 @@ def slerp(
 
     interpolation_metrics: dict[int, str] = {}
 
-    for step in range(0, 100, int(interpolation_config.stride * 100)):
+    print(f"Interpolating: {interpolation_config.model_a} -> {interpolation_config.model_b}.")
+    print(f"Evaluating: {interpolation_config.dataset_a.dataset_id} -> {interpolation_config.dataset_b.dataset_id}.")
+
+    print("Pre-slerp scores:")
+    model_a = AutoModelForCausalLM.from_pretrained(interpolation_config.model_a)
+    model_b = AutoModelForCausalLM.from_pretrained(interpolation_config.model_b)
+
+    metrics_a = evaluate_model_on_dataset(model_a, validation_dataset_a)
+    metrics_b = evaluate_model_on_dataset(model_b, validation_dataset_b)
+
+    print(f"  - A: {metrics_a}")
+    print(f"  - B: {metrics_b}")
+
+    for step in range(0, 100 + int(interpolation_config.stride * 100), int(interpolation_config.stride * 100)):
         merge_config = MergeConfiguration(
             merge_method="slerp",
             base_model=interpolation_config.base_model or interpolation_config.model_a,
