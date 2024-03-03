@@ -89,8 +89,7 @@ def slerp(
 
         model = AutoModelForCausalLM.from_pretrained(merge_output_directory.name)
         metrics_a = evaluate_model_on_dataset(model, validation_dataset_a)
-
-        metrics_b = evaluate_model_on_dataset(model, validation_dataset_a)
+        metrics_b = evaluate_model_on_dataset(model, validation_dataset_b)
 
         interpolation_metrics[step / 100] = {}
         interpolation_metrics[step / 100]["validation_a"] = metrics_a
