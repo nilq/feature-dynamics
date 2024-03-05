@@ -73,7 +73,7 @@ def slerp(
     )
 
     training_dataset_b, validation_dataset_b = datasplit_from_dataset_config(
-        dataset_config=interpolation_config.dataset_a,
+        dataset_config=interpolation_config.dataset_b,
         training_config=Accelerator(),  # Duck-typing trick.
     )
 

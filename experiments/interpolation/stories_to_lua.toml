@@ -1,7 +1,7 @@
 [slerp]
 model_a = "nilq/mistral-1L-tiny"
 model_b = "nilq/lua-mistral-1L-tiny"
-stride = 0.25
+stride = 0.05
 
 [slerp.dataset_a]
 dataset_id = "roneneldan/TinyStories"
