@@ -1,0 +1,9 @@
+models:
+  - model: nilq/mistral-1L-tiny
+  - model: nilq/lua-mistral-1L-tiny
+    parameters:
+      density: 0.5
+      weight: 0.5
+merge_method: ties
+base_model: nilq/mistral-1L-tiny
+dtype: float16

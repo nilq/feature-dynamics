@@ -5,5 +5,5 @@ merge_method: slerp
 base_model: nilq/mistral-2L-tiny
 parameters:
   t:
-    - value: 0.8
+    - value: 0.6
 dtype: float16

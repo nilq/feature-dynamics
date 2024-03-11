@@ -1,6 +1,7 @@
 """Interpolating weight merging with continuous evaluation."""
 
 import json
+from typing import Any
 import torch
 import typer
 import tomllib
@@ -22,7 +23,6 @@ from training.transformer.data import datasplit_from_dataset_config
 from transformers import Trainer, TrainingArguments, default_data_collator, AutoTokenizer
 import evaluate
 
-app = typer.Typer()
 
 def evaluate_model_on_dataset(model: AutoModelForCausalLM, dataset: DataLoader, device="cuda") -> dict[str, float]:
     """Evaluate model on dataset.
@@ -63,10 +63,23 @@ def evaluate_model_on_dataset(model: AutoModelForCausalLM, dataset: DataLoader, 
     return result
 
 
-def slerp(
-    config_path: str
+def slerp_parameters_at_step(step: int) -> dict[str, Any]:
+    """Get slerp parameters at step."""
+    return {
+        "t": step / 100
+    }
+
+def ties_parameters_at_step(step: int) -> dict[str, Any]:
+    return {
+        "density": step / 100,
+        "weight": 0.5
+    }
+
+def interpolate(
+    config_path: str,
+    merge_method: str
 ) -> None:
-    interpolation_config = InterpolationConfig(**tomllib.load(open(config_path, "rb"))["slerp"])
+    interpolation_config = InterpolationConfig(**tomllib.load(open(config_path, "rb"))["interpolation"])
     training_dataset_a, validation_dataset_a = datasplit_from_dataset_config(
         dataset_config=interpolation_config.dataset_a,
         training_config=Accelerator(),  # Duck-typing trick.
@@ -94,20 +107,20 @@ def slerp(
 
     for step in range(0, 100 + int(interpolation_config.stride * 100), int(interpolation_config.stride * 100)):
         merge_config = MergeConfiguration(
-            merge_method="slerp",
+            merge_method=merge_method,
             base_model=interpolation_config.base_model or interpolation_config.model_a,
             models=[
                 InputModelDefinition(
-                    model=interpolation_config.model_a,
+                    model=interpolation_config.model_a, # Base
+                    parameters={ "weight": 0.5 } if merge_method == "ties" else None
                 ),
                 InputModelDefinition(
                     model=interpolation_config.model_b,
+                    parameters=ties_parameters_at_step(step) if merge_method == "ties" else None
                 )
             ],
             dtype=interpolation_config.dtype,
-            parameters={
-                "t": step / 100
-            }
+            parameters=slerp_parameters_at_step(step) if merge_method == "slerp" else None
         )
 
         merge_output_directory = tempfile.TemporaryDirectory()
@@ -127,6 +140,7 @@ def slerp(
 
     open("metric_test.json", "w+").write(json.dumps(interpolation_metrics))
 
+
 if __name__ == "__main__":
-    typer.run(slerp)
+    typer.run(interpolate)
 
