@@ -14,6 +14,11 @@ from typing import Any, Literal
 class ModelConfig(BaseModel):
     """Model configurations."""
 
+    base_model: str | None = Field(
+        default=None,
+        description="Base model to fine-tune."
+    )
+
     model_type: str = Field(
         ...,
         description="Name of autoregressive model supported by HuggingFace transformers ",

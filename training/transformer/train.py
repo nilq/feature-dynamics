@@ -34,27 +34,33 @@ def train(config_path: str) -> None:
         config_path (str): Path to training config.
     """
     training_config = TrainingConfig.from_toml_path(file_path=config_path)
-    trainer_kwargs: dict[str, Any] = {}
-
     set_seed(training_config.seed)
 
     model_config = CONFIG_MAPPING[training_config.model_config.model_type]()
-
     if overrides := training_config.model_config.model_config_overrides:
         model_config.update(config_dict=overrides)
 
-    tokenizer = PreTrainedTokenizerFast(
-        tokenizer_object=tokenizer_from_dataset_config(training_config.dataset_config)
-    )
     torch_dtype = (
         model_config.torch_dtype
         if model_config.torch_dtype in ["auto", None]
         else getattr(torch, model_config.torch_dtype)
     )
-    model = AutoModelForCausalLM.from_config(
-        config=model_config, trust_remote_code=True, torch_dtype=torch_dtype
-    )
 
+    if base_model := training_config.model_config.base_model:
+        model = AutoModelForCausalLM.from_pretrained(
+            base_model,
+            config=model_config,
+            torch_dtype=torch_dtype,
+            trust_remote_code=True,
+        )
+    else:
+        model = AutoModelForCausalLM.from_config(
+            config=model_config, trust_remote_code=True, torch_dtype=torch_dtype
+        )
+
+    tokenizer = PreTrainedTokenizerFast(
+        tokenizer_object=tokenizer_from_dataset_config(training_config.dataset_config)
+    )
     num_params: int = sum(p.numel() for p in model.parameters())
 
     training_dataset, validation_dataset = datasplit_from_dataset_config(
@@ -137,6 +143,7 @@ def train(config_path: str) -> None:
             dataset_tags=training_config.dataset_config.dataset_id,
             dataset=f"{training_config.dataset_config.dataset_id}",
             tasks="text-generation",
+            finetuned_from=training_config.model_config.base_model
         )
 
 

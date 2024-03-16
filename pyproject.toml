@@ -30,6 +30,8 @@ evaluate = "^0.4.1"
 ruff = "^0.2.2"
 mergekit = {path = "../mergekit"}
 ipdb = "^0.13.13"
+scikit-learn = "^1.4.1.post1"
+transformer-lens = {git = "https://github.com/nilq/TransformerLens"}
 
 
 [build-system]
