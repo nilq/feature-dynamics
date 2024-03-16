@@ -1,6 +1,22 @@
 # feature-dynamics
 🪴 Planting language models, seeing how they grow etc.
 
+## Getting started
+
+**Conda 🐍**
+```
+conda env create -f conda.yaml
+conda activate feature-dynamics
+```
+
+**Dependencies 📦**
+
+```
+pip install pipx
+pipx install poetry
+poetry install
+```
+
 ## End-to-end Toolkit
 
 ### Training
