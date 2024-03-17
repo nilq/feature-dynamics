@@ -14,7 +14,7 @@ from transformers import (
     Trainer,
     default_data_collator,
     set_seed,
-    PreTrainedTokenizerFast
+    PreTrainedTokenizerFast,
 )
 
 from training.transformer.config import TrainingConfig
@@ -143,10 +143,9 @@ def train(config_path: str) -> None:
             dataset_tags=training_config.dataset_config.dataset_id,
             dataset=f"{training_config.dataset_config.dataset_id}",
             tasks="text-generation",
-            finetuned_from=training_config.model_config.base_model
+            finetuned_from=training_config.model_config.base_model,
         )
 
 
 if __name__ == "__main__":
     typer.run(train)
-

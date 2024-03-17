@@ -59,8 +59,16 @@ def datasplit_from_dataset_config(
 
     if list(raw_datasets) == ["train"]:
         logger.info("Only training set available. Slicing it up.")
-        validation_split = f"train[:{int(dataset_config.validation_percentage * 100)}%]" if not dataset_config.test_mode else "train[:10]"
-        training_split = f"train[{int(dataset_config.validation_percentage * 100)}%:]" if not dataset_config.test_mode else "train[10:30]"
+        validation_split = (
+            f"train[:{int(dataset_config.validation_percentage * 100)}%]"
+            if not dataset_config.test_mode
+            else "train[:10]"
+        )
+        training_split = (
+            f"train[{int(dataset_config.validation_percentage * 100)}%:]"
+            if not dataset_config.test_mode
+            else "train[10:30]"
+        )
 
         raw_datasets["validation"] = load_dataset(
             path=dataset_config.dataset_id,

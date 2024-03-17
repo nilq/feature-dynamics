@@ -19,7 +19,7 @@ def hooked_model_fixed(model_name: str) -> HookedTransformer:
     model = HookedTransformer.from_pretrained(model_name, center_writing_weights=False)
     vanilla_tokenizer = AutoTokenizer.from_pretrained(model_name)
     model.tokenizer = vanilla_tokenizer
-    
+
     # Padding is not needed, but TransformerLens thinks it is. We play along.
     model.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
 
@@ -44,7 +44,9 @@ def get_model_activations(
     Returns:
         torch.Tensor: Activations.
     """
-    _, activation_cache = model.run_with_cache(model_input, stop_at_layer=layer + 1, names_filter=activation_name)
+    _, activation_cache = model.run_with_cache(
+        model_input, stop_at_layer=layer + 1, names_filter=activation_name
+    )
 
     activations = activation_cache[activation_name]
     activations = activations.reshape(-1, activations.shape[-1])

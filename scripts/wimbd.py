@@ -10,6 +10,7 @@ from typing import Optional
 
 app = typer.Typer()
 
+
 def save_jsonl_gz(data, output_path: Path) -> None:
     """Save a list of dictionaries as a compressed JSONL file.
 
@@ -17,12 +18,15 @@ def save_jsonl_gz(data, output_path: Path) -> None:
         data: List of dictionaries to save.
         output_path (Path): The path to save the compressed JSONL file.
     """
-    with gzip.open(output_path, 'wt', encoding='UTF-8') as f:
+    with gzip.open(output_path, "wt", encoding="UTF-8") as f:
         for record in data:
-            f.write(json.dumps(record) + '\n')
+            f.write(json.dumps(record) + "\n")
+
 
 @app.command()
-def download_and_convert(dataset_id: str, output_path: str, dataset_config: Optional[str] = None) -> None:
+def download_and_convert(
+    dataset_id: str, output_path: str, dataset_config: Optional[str] = None
+) -> None:
     """Download and convert dataset to be ready for Wimbd.
 
     Args:
@@ -44,9 +48,12 @@ def download_and_convert(dataset_id: str, output_path: str, dataset_config: Opti
 
         # Convert to DataFrame and then to JSONL for each file in the split
         for i, data in enumerate(dataset[split]):
-            output_file = split_dir / f"{split}.{i:05d}-of-{len(dataset[split]):05d}.json.gz"
+            output_file = (
+                split_dir / f"{split}.{i:05d}-of-{len(dataset[split]):05d}.json.gz"
+            )
             save_jsonl_gz(data, output_file)
             print(f"Saved {output_file}")
+
 
 if __name__ == "__main__":
     app()

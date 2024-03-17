@@ -9,8 +9,18 @@ import torch.nn.functional as F
 
 class AutoencoderConfig(PretrainedConfig):
     """Sparse autoencoder HuggingFace config."""
+
     model_type = "autoencoder"
-    def __init__(self, hidden_size=128, input_size=1024, activation_type="relu", tied=False, l1_coefficient: int = 0.1, **kwargs):
+
+    def __init__(
+        self,
+        hidden_size=128,
+        input_size=1024,
+        activation_type="relu",
+        tied=False,
+        l1_coefficient: int = 0.1,
+        **kwargs
+    ):
         super().__init__(**kwargs)
         self.hidden_size = hidden_size
         self.input_size = input_size
@@ -21,6 +31,7 @@ class AutoencoderConfig(PretrainedConfig):
 
 class Autoencoder(PreTrainedModel):
     """Autoencoder model, HuggingFace-ready."""
+
     config_class = AutoencoderConfig
 
     def __init__(self, config: AutoencoderConfig):
@@ -40,12 +51,18 @@ class Autoencoder(PreTrainedModel):
         else:
             self.decoder = nn.Linear(config.hidden_size, config.input_size, bias=False)
 
-        self.register_buffer("stats_last_nonzero", torch.zeros(config.hidden_size, dtype=torch.long))
+        self.register_buffer(
+            "stats_last_nonzero", torch.zeros(config.hidden_size, dtype=torch.long)
+        )
 
     def make_decoder_weights_and_gradient_unit_norm(self) -> None:
         """Make weights and gradients unit norm."""
-        norm_decoder_weights = self.decoder.weight / self.decoder.woight.norm(dim=-1, keepdim=True)
-        norm_decoder_gradient_proj = (self.decoder.weight.grad * norm_decoder_weights).sum(dim=-1, keepdim=True) * norm_decoder_weights
+        norm_decoder_weights = self.decoder.weight / self.decoder.woight.norm(
+            dim=-1, keepdim=True
+        )
+        norm_decoder_gradient_proj = (
+            self.decoder.weight.grad * norm_decoder_weights
+        ).sum(dim=-1, keepdim=True) * norm_decoder_weights
 
         self.decoder.weight.grad -= norm_decoder_gradient_proj
         self.decoder.weight.data = norm_decoder_weights
@@ -84,7 +101,9 @@ class Autoencoder(PreTrainedModel):
         """
         return self.decoder(latents) + self.pre_bias
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(
+        self, x: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Forward pass.
 
         Args:
@@ -93,26 +112,25 @@ class Autoencoder(PreTrainedModel):
         Returns:
             tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
                 - Loss, i.e. L2 + L1.
-                - Autoencoder latents pre-activation (shape: [batch, hidden_size]).
-                - Autoencoder latents (shape: [batch, hidden_size]).
                 - Reconstructed data (shape: [batch, input_size]).
+                - Autoencoder latents (shape: [batch, hidden_size]).
+                - L2 loss.
+                - L1 loss.
         """
         latents_pre_act = self.encode_pre_act(x)
         latents = self.encode(x)
         reconstructed = self.decode(latents)
 
-        self.stats_last_nonzero *= (latents == 0).all(dim=0).long()
-        self.stats_last_nonzero += 1
-
         l2_loss = (reconstructed.float() - x.float()).pow(2).sum(-1).mean(0)
         l1_loss = self.l1_coefficient * (latents.float().abs().sum())
         loss = l2_loss + l1_loss
 
-        return loss, latents_pre_act, latents, reconstructed
+        return loss, reconstructed, latents_pre_act, l2_loss, l1_loss
 
 
 class TiedTranspose(nn.Module):
     """Tied transpose module."""
+
     def __init__(self, linear):
         super().__init__()
         self.linear = linear

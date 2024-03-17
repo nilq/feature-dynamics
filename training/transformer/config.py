@@ -14,10 +14,7 @@ from typing import Any, Literal
 class ModelConfig(BaseModel):
     """Model configurations."""
 
-    base_model: str | None = Field(
-        default=None,
-        description="Base model to fine-tune."
-    )
+    base_model: str | None = Field(default=None, description="Base model to fine-tune.")
 
     model_type: str = Field(
         ...,
@@ -58,7 +55,8 @@ class DatasetConfig(BaseModel):
     )
 
     test_mode: bool = Field(
-        default=False, description="Whether to load a very tiny fraction for dry-run test."
+        default=False,
+        description="Whether to load a very tiny fraction for dry-run test.",
     )
 
 

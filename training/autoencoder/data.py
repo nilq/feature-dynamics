@@ -11,6 +11,7 @@ from models.sparse_autoencoder.utils import get_model_activations
 
 class ActivationDataset(Dataset):
     """Model activation dataset."""
+
     def __init__(
         self,
         dataset_name: str,
@@ -18,7 +19,7 @@ class ActivationDataset(Dataset):
         dataset_split: str,
         model: HookedTransformer,
         target_layer: int,
-        target_activation_name: str
+        target_activation_name: str,
     ) -> None:
         """Initialise with model/layer/activation target and source text dataset.
 
@@ -32,10 +33,9 @@ class ActivationDataset(Dataset):
         """
         super().__init__()
 
-        self.text_dataset = load_dataset(
-            dataset_name,
-            split=dataset_split
-        )[dataset_text_column]
+        self.text_dataset = load_dataset(dataset_name, split=dataset_split)[
+            dataset_text_column
+        ]
 
         self.model = model
         self.target_layer = target_layer
@@ -43,7 +43,7 @@ class ActivationDataset(Dataset):
 
     def __len__(self) -> int:
         """Get length of dataset.
-        
+
         Returns:
             int: Length of text dataset.
         """
@@ -64,7 +64,7 @@ class ActivationDataset(Dataset):
             model=self.model,
             model_input=text,
             layer=self.target_layer,
-            activation_name=self.target_activation_name
+            activation_name=self.target_activation_name,
         )
 
         return activations
