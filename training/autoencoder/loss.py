@@ -1,4 +1,4 @@
-"""Reconstruction loss etc."""
+"""Reconstruction loss etc. (https://github.com/neelnanda-io/1L-Sparse-Autoencoder/blob/main/utils.py)"""
 
 import torch
 from models.sparse_autoencoder.model import Autoencoder

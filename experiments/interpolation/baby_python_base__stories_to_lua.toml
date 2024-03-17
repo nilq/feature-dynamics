@@ -1,7 +1,7 @@
 [interpolation]
-model_a = "nilq/baby-python-mistral-1L-tiny-lua-ft"
-model_b = "nilq/baby-python-mistral-1L-tiny-TinyStories-ft"
-stride = 0.2
+model_a = "nilq/baby-python-mistral-1L-tiny-TinyStories-ft"
+model_b = "nilq/baby-python-mistral-1L-tiny-lua-ft"
+stride = 0.05
 
 [interpolation.dataset_a]
 dataset_id = "roneneldan/TinyStories"
