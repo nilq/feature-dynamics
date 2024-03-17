@@ -29,26 +29,24 @@ def hooked_model_fixed(model_name: str) -> HookedTransformer:
 @torch.no_grad()
 def get_model_activations(
     model: HookedTransformer,
-    tokens: list[int],
+    model_input: str | list[str],
     layer: int,
     activation_name: str,
-    batch_size: int = 1024,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> torch.Tensor:
     """Get model activations at given layer.
 
     Args:
         model (HookedTransformer): Hooked transformer model.
-        tokens (list[int]): Token IDs to get activations for.
+        model_input (str | list[str]): Input text or list of input texts.
         layer (int): Index of layer.
         activation_name (str): Name of activations to get.
-        batch_size (int, optional): Batch size of subsampled activations.
 
     Returns:
-        tuple[torch.Tensor, torch.Tensor]: Subsampled activations, all activations.
+        torch.Tensor: Activations.
     """
-    _, cache = model.run_with_cache(tokens, stop_at_layer=layer + 1, names_filter=activation_name)
+    _, activation_cache = model.run_with_cache(model_input, stop_at_layer=layer + 1, names_filter=activation_name)
 
-    activations = cache[activation_name]
+    activations = activation_cache[activation_name]
     activations = activations.reshape(-1, activations.shape[-1])
 
     return activations

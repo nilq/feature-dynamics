@@ -1,5 +1,5 @@
 [training]
-epochs = 4
+num_train_epochs = 1
 learning_rate = 2e-5
 lr_scheduler_type = "cosine"
 weight_decay = 0.01
@@ -28,7 +28,7 @@ max_position_embeddings = 2048
 attention_dropout = 0
 
 [training.wandb]
-project = "tiny-stories"
+project = "coding"
 notes = "Mistral-like 1-layer model."
 tags = ["mistral", "1L"]
 
@@ -38,4 +38,3 @@ dataset_text_key = "content"
 tokenizer_id = "mistralai/Mistral-7B-v0.1"
 block_size = 256
 use_syntaxi = false
-

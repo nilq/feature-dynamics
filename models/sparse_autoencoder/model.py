@@ -1,6 +1,7 @@
 """Sparse autoencoder model."""
 
-from transformers import PreTrainedModel, PretrainedConfig
+from transformers import PreTrainedModel, PretrainedConfig, AutoConfig
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,10 +10,10 @@ import torch.nn.functional as F
 class AutoencoderConfig(PretrainedConfig):
     """Sparse autoencoder HuggingFace config."""
     model_type = "autoencoder"
-    def __init__(self, n_latents=128, n_inputs=784, activation_type="relu", tied=False, l1_coefficient: int = 0.1, **kwargs):
+    def __init__(self, hidden_size=128, input_size=1024, activation_type="relu", tied=False, l1_coefficient: int = 0.1, **kwargs):
         super().__init__(**kwargs)
-        self.n_latents = n_latents
-        self.n_inputs = n_inputs
+        self.hidden_size = hidden_size
+        self.input_size = input_size
         self.activation_type = activation_type
         self.l1_coefficient = l1_coefficient
         self.tied = tied
@@ -22,12 +23,13 @@ class Autoencoder(PreTrainedModel):
     """Autoencoder model, HuggingFace-ready."""
     config_class = AutoencoderConfig
 
-    def __init__(self, config):
+    def __init__(self, config: AutoencoderConfig):
         super().__init__(config)
         self.config = config
-        self.pre_bias = nn.Parameter(torch.zeros(config.n_inputs))
-        self.encoder = nn.Linear(config.n_inputs, config.n_latents, bias=False)
-        self.latent_bias = nn.Parameter(torch.zeros(config.n_latents))
+        self.pre_bias = nn.Parameter(torch.zeros(config.input_size))
+        self.encoder = nn.Linear(config.input_size, config.hidden_size, bias=False)
+        self.latent_bias = nn.Parameter(torch.zeros(config.hidden_size))
+        self.l1_coefficient = config.l1_coefficient
 
         # TODO: Add more maybe.
         if config.activation_type == "relu":
@@ -36,9 +38,9 @@ class Autoencoder(PreTrainedModel):
         if config.tied:
             self.decoder = TiedTranspose(self.encoder)
         else:
-            self.decoder = nn.Linear(config.n_latents, config.n_inputs, bias=False)
+            self.decoder = nn.Linear(config.hidden_size, config.input_size, bias=False)
 
-        self.register_buffer("stats_last_nonzero", torch.zeros(config.n_latents, dtype=torch.long))
+        self.register_buffer("stats_last_nonzero", torch.zeros(config.hidden_size, dtype=torch.long))
 
     def make_decoder_weights_and_gradient_unit_norm(self) -> None:
         """Make weights and gradients unit norm."""
@@ -75,10 +77,10 @@ class Autoencoder(PreTrainedModel):
         """Decode latents.
 
         Args:
-            latents (torch.Tensor): Autoencoder latents (shape: [batch, n_latents]).
+            latents (torch.Tensor): Autoencoder latents (shape: [batch, hidden_size]).
 
         Returns:
-            torch.Tensor: Reconstructed data (shape: [batch, n_inputs]).
+            torch.Tensor: Reconstructed data (shape: [batch, input_size]).
         """
         return self.decoder(latents) + self.pre_bias
 
@@ -86,14 +88,14 @@ class Autoencoder(PreTrainedModel):
         """Forward pass.
 
         Args:
-            x (torch.Tensor): Input data (shape: [batch, n_inputs]).
+            x (torch.Tensor): Input data (shape: [batch, input_size]).
 
         Returns:
             tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-                - Reconstruction loss, i.e. L2 + L1.
-                - Autoencoder latents pre-activation (shape: [batch, n_latents]).
-                - Autoencoder latents (shape: [batch, n_latents]).
-                - Reconstructed data (shape: [batch, n_inputs]).
+                - Loss, i.e. L2 + L1.
+                - Autoencoder latents pre-activation (shape: [batch, hidden_size]).
+                - Autoencoder latents (shape: [batch, hidden_size]).
+                - Reconstructed data (shape: [batch, input_size]).
         """
         latents_pre_act = self.encode_pre_act(x)
         latents = self.encode(x)

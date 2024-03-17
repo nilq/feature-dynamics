@@ -1,0 +1,18 @@
+[training]
+learning_rate = 1e-4
+adam_beta1 = 0.9
+adam_beta2 = 0.99
+dictionary_multiplier = 32
+
+[training.model]
+target_model_name = "nilq/mistral-1L-mini"
+l1_coefficient = 3e-4
+torch_dtype = "bfloat16"
+tied = false
+
+[training.data]
+dataset_name = "roneneldan/TinyStories"
+dataset_text_column = "text"
+dataset_split = "validation"
+target_layer = 0
+target_activation_name = "blocks.0.mlp.hook_post"

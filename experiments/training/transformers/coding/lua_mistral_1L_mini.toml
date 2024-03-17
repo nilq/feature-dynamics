@@ -1,5 +1,5 @@
 [training]
-epochs = 4
+num_train_epochs = 4
 learning_rate = 6e-4
 lr_scheduler_type = "cosine"
 weight_decay = 0.1
