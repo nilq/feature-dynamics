@@ -7,6 +7,7 @@ It will be transformed to train sparse autoencoders.
 """
 
 import os
+import numpy as np
 
 import typer
 import torch
@@ -14,8 +15,10 @@ import math
 import wandb
 import tempfile
 
+from tqdm import tqdm
+from itertools import islice
 from accelerate import Accelerator
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torch.optim import Optimizer
 from models.sparse_autoencoder.model import Autoencoder, AutoencoderConfig
 from transformers import AutoConfig
@@ -48,14 +51,35 @@ def get_activation_frequencies(
             activation_name=target_activation_name,
         )
         hidden = encoder(activations)[2]
-
-        frequency_scores = (hidden > 0).sum(0)
+        frequency_scores += (hidden > 0).sum(0)
         total += hidden.shape[0]
 
     frequency_scores /= total
     dead_percentage = (frequency_scores == 0).float().mean()
 
     return frequency_scores, dead_percentage
+
+
+def get_uniform_sample_loader(dataset, sample_size, batch_size=1):
+    """
+    Create a DataLoader for a uniform sample of the dataset.
+
+    Args:
+        dataset: The dataset to sample from.
+        sample_size: The number of samples to draw from the dataset.
+        batch_size: The batch size for the DataLoader of the sampled subset.
+
+    Returns:
+        A DataLoader instance for the sampled subset.
+    """
+    sample_size = min(sample_size, len(dataset))
+    indices = np.random.choice(len(dataset), size=sample_size, replace=False)
+    indices = indices.astype(int).tolist()
+
+    subset = Subset(dataset, indices)
+    subset_loader = DataLoader(subset, batch_size=batch_size, shuffle=False)
+
+    return subset_loader
 
 
 def train_epoch(
@@ -66,14 +90,27 @@ def train_epoch(
     data_loader: DataLoader,
     training_config: TrainingConfig,
 ):
+    sample_loader = get_uniform_sample_loader(
+        data_loader.dataset.text_dataset, training_config.reconstruction_loss_sample_amount, batch_size=1
+    )
+    texts = [
+        torch.tensor(sample["input_ids"], device=target_model.cfg.device)
+        for sample in sample_loader
+    ]
+
+    data_loader = tqdm(data_loader, desc="Training")
+
     for i, batch in enumerate(data_loader):
         with accelerator.accumulate(model):
             loss, _, _, l2_loss, l1_loss = model(batch)
+
             accelerator.backward(loss)
-            model.make_decoder_weights_and_grad_unit_norm()
+            model.make_decoder_weights_and_gradient_unit_norm()
 
             optimizer.step()
             optimizer.zero_grad()
+
+        data_loader.set_description(f"Training - Loss: {loss.item():.4f}")
 
         if accelerator.sync_gradients:
             if training_config.wandb:
@@ -87,32 +124,38 @@ def train_epoch(
                     )
 
                 if i % 1000:
-                    samples = data_loader
-
                     reconstruction_score, *_ = get_reconstruction_loss(
                         model=target_model,
                         encoder=model,
-                        samples=samples,
-                        target_activation_name=training_config.model.target_activation_name
+                        samples=texts,
+                        target_activation_name=training_config.data.target_activation_name
                     )
 
                     activation_frequencies, dead_percentage = get_activation_frequencies(
                         model=target_model,
                         encoder=model,
-                        samples=samples,
-                        target_activation_name=training_config.model.target_activation_name,
-                        target_layer=training_config.model.target_layer,
+                        samples=texts,
+                        target_activation_name=training_config.data.target_activation_name,
+                        target_layer=training_config.data.target_layer,
                         device=model.device
                     )
+
+                    frequency_below_1e_minus_6 = (activation_frequencies < 1e-6).float().mean().item()
+                    frequency_below_1e_minus_5 = (activation_frequencies < 1e-5).float().mean().item()
 
                     wandb.log(
                         {
                             "reconstruction_score": reconstruction_score,
                             "dead_percentage": dead_percentage,
-                            "frequency_below_1e-6": (activation_frequencies < 1e-6).float().mean().item(),
-                            "frequency_below_1e-5": (activation_frequencies < 1e-5).float().mean().item(),
+                            "frequency_below_1e-6": frequency_below_1e_minus_6,
+                            "frequency_below_1e-5": frequency_below_1e_minus_5
                         }
                     )
+
+                    print("Reconstruction score:", reconstruction_score)
+                    print("Dead percentage:", dead_percentage)
+                    print("Frequency below 1e-6:", frequency_below_1e_minus_6)
+                    print("Frequency below 1e-5:", frequency_below_1e_minus_5)
 
 
 def train(
@@ -173,14 +216,14 @@ def train_autoencoder(file_path: str) -> None:
     training_config = TrainingConfig.from_toml_path(file_path=file_path)
 
     target_model_config = AutoConfig.from_pretrained(
-        training_config.model.target_model_name
+        training_config.data.target_model_name
     )
-    target_model = hooked_model_fixed(training_config.model.target_model_name)
+    target_model = hooked_model_fixed(training_config.data.target_model_name, dtype=training_config.model.torch_dtype)
     model = Autoencoder(
         AutoencoderConfig(
-            hidden_size=training_config.dictionary_multiplier
-            * target_model_config.intermediate_size,
-            input_size=target_model_config.intermediate_size,
+            hidden_size=int(training_config.dictionary_multiplier
+            * target_model_config.intermediate_size),
+            input_size=int(target_model_config.intermediate_size),
             tied=training_config.model.tied,
             l1_coefficient=training_config.model.l1_coefficient,
             torch_dtype=training_config.model.torch_dtype,
@@ -188,11 +231,14 @@ def train_autoencoder(file_path: str) -> None:
     )
 
     dataset = ActivationDataset(
-        dataset_name=training_config.data.dataset_name,
-        dataset_text_column=training_config.data.dataset_text_column,
+        dataset_id=training_config.data.dataset_id,
+        dataset_text_key=training_config.data.dataset_text_key,
         dataset_split=training_config.data.dataset_split,
         target_layer=training_config.data.target_layer,
         target_activation_name=training_config.data.target_activation_name,
+        model=target_model,
+        tokenizer_id=training_config.data.tokenizer_id,
+        block_size=training_config.data.block_size
     )
 
     data_loader = DataLoader(

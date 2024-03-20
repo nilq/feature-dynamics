@@ -7,16 +7,17 @@ from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
 
-def hooked_model_fixed(model_name: str) -> HookedTransformer:
+def hooked_model_fixed(model_name: str, dtype: str) -> HookedTransformer:
     """Get hooked model in a way that doesn't explode.
 
     Args:
         model_name (str): Name/ID of HuggingFace model.
+        dtype (str): Data type to load model in.
 
     Returns:
         HookedTransformer: Hooked transformer.
     """
-    model = HookedTransformer.from_pretrained(model_name, center_writing_weights=False)
+    model = HookedTransformer.from_pretrained(model_name, center_writing_weights=False, dtype=dtype)
     vanilla_tokenizer = AutoTokenizer.from_pretrained(model_name)
     model.tokenizer = vanilla_tokenizer
 

@@ -7,6 +7,34 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def autoencoder_loss(
+    reconstruction: torch.Tensor,
+    original_input: torch.Tensor,
+    latent_activations: torch.Tensor,
+    l1_weight: float,
+) -> torch.Tensor:
+    return (
+        normalized_mean_squared_error(reconstruction, original_input)
+        + normalized_L1_loss(latent_activations, original_input) * l1_weight
+    )
+
+
+def normalized_mean_squared_error(
+    reconstruction: torch.Tensor,
+    original_input: torch.Tensor,
+) -> torch.Tensor:
+    return (
+        ((reconstruction - original_input) ** 2).mean(dim=1) / (original_input**2).mean(dim=1)
+    ).mean()
+
+
+def normalized_L1_loss(
+    latent_activations: torch.Tensor,
+    original_input: torch.Tensor,
+) -> torch.Tensor:
+    return (latent_activations.abs().sum(dim=1) / original_input.norm(dim=1)).mean()
+
+
 class AutoencoderConfig(PretrainedConfig):
     """Sparse autoencoder HuggingFace config."""
 
@@ -50,7 +78,7 @@ class Autoencoder(PreTrainedModel):
             config.input_size, config.hidden_size, bias=False, dtype=config.torch_dtype
         )
         self.latent_bias = nn.Parameter(
-            torch.zeros(config.hidden_size), dtype=config.torch_dtype
+            torch.zeros(config.hidden_size, dtype=config.torch_dtype)
         )
         self.l1_coefficient = config.l1_coefficient
 
@@ -70,7 +98,7 @@ class Autoencoder(PreTrainedModel):
 
     def make_decoder_weights_and_gradient_unit_norm(self) -> None:
         """Make weights and gradients unit norm."""
-        norm_decoder_weights = self.decoder.weight / self.decoder.woight.norm(
+        norm_decoder_weights = self.decoder.weight / self.decoder.weight.norm(
             dim=-1, keepdim=True
         )
         norm_decoder_gradient_proj = (
@@ -120,7 +148,7 @@ class Autoencoder(PreTrainedModel):
         """Forward pass.
 
         Args:
-            x (torch.Tensor): Input data (shape: [batch, input_size]).
+            x (torch.Tensor): Input data (shape: [batch, input_size...]).
 
         Returns:
             tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -134,7 +162,7 @@ class Autoencoder(PreTrainedModel):
         latents = self.encode(x)
         reconstructed = self.decode(latents)
 
-        l2_loss = (reconstructed.float() - x.float()).pow(2).sum(-1).mean(0)
+        l2_loss = (reconstructed.float() - x.float()).pow(2).sum(-1).mean()
         l1_loss = self.l1_coefficient * (latents.float().abs().sum())
         loss = l2_loss + l1_loss
 

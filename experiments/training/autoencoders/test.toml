@@ -3,18 +3,26 @@ learning_rate = 1e-4
 adam_beta1 = 0.9
 adam_beta2 = 0.99
 dictionary_multiplier = 32
+reconstruction_loss_sample_amount = 1000
 
 [training.model]
-target_model_name = "nilq/mistral-1L-mini"
 l1_coefficient = 3e-4
 torch_dtype = "bfloat16"
 tied = false
 
+[training.wandb]
+project = "sparse-autoencoder"
+notes = "Dry-run."
+tags = ["Sparse Autoencoder", "mistral-1L-mini"]
+
 [training.data]
-dataset_name = "roneneldan/TinyStories"
-dataset_text_column = "text"
+dataset_id = "roneneldan/TinyStories"
+dataset_text_key = "text"
 dataset_split = "validation"
 target_layer = 0
+target_model_name = "nilq/mistral-1L-mini"
 target_activation_name = "blocks.0.mlp.hook_post"
 batch_size = 64
-shuffle = True
+shuffle = true
+tokenizer_id = "mistralai/Mistral-7B-v0.1"
+block_size = 256

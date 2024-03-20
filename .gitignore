@@ -163,3 +163,4 @@ wandb/
 **/outputs/*
 wimbd/*
 !wimbd/README.md
+results/

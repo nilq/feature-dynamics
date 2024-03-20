@@ -51,7 +51,7 @@ class DatasetConfig(BaseModel):
         default=0.2, description="Validation split percentage."
     )
     use_syntaxi: bool = Field(
-        default=True, description="Whether to use Syntaxi'ed tokenizer."
+        default=False, description="Whether to use Syntaxi'ed tokenizer."
     )
 
     test_mode: bool = Field(
