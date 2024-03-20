@@ -4,6 +4,7 @@ import torch
 
 
 from torch.utils.data import DataLoader
+from models.sparse_autoencoder.utils import get_model_activations
 from training.autoencoder.data import ActivationDataset
 from models.sparse_autoencoder.model import Autoencoder
 from functools import partial
@@ -26,7 +27,9 @@ def zero_ablate_hook(mlp_post, hook):
 
 
 @torch.no_grad()
-def get_reconstruction_loss(model, encoder, samples: list[str], target_activation_name: str):
+def get_reconstruction_loss(
+    model, encoder, samples: list[str], target_activation_name: str
+) -> tuple[float, float, float, float]:
     loss_list = []
 
     for text in samples:

@@ -10,5 +10,6 @@ def test_loss_doesnt_explode() -> None:
     model = hooked_model_fixed("nilq/mistral-1L-tiny")
     encoder = Autoencoder(AutoencoderConfig(input_size=1024, hidden_size=1024 * 30))
 
-    assert get_reconstruction_loss(model, encoder, ["hello, this is a test"], "blocks.0.mlp.hook_post"), \
-        "Unfortunately the reconstruction loss broke."
+    assert get_reconstruction_loss(
+        model, encoder, ["hello, this is a test"], "blocks.0.mlp.hook_post"
+    ), "Unfortunately the reconstruction loss broke."

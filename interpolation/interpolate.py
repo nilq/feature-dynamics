@@ -13,7 +13,7 @@ from mergekit.merge import run_merge
 from mergekit.options import MergeOptions
 from accelerate import Accelerator
 from transformers import AutoModelForCausalLM
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SubsetRandomSampler, Dataset
 
 import torch.nn.functional as F
 import torch
@@ -30,7 +30,10 @@ import evaluate
 
 
 def evaluate_model_on_dataset(
-    model: AutoModelForCausalLM, dataset: DataLoader, device="cuda"
+    model: AutoModelForCausalLM,
+    dataset: Dataset,
+    device="cuda",
+    subset_size: int | None = None,
 ) -> dict[str, float]:
     """Evaluate model on dataset."""
 
@@ -151,7 +154,9 @@ def interpolate(config_path: str, merge_method: str) -> None:
 
         model = AutoModelForCausalLM.from_pretrained(merge_output_directory.name)
         metrics_a = evaluate_model_on_dataset(model, validation_dataset_a)
-        metrics_b = evaluate_model_on_dataset(model, validation_dataset_b)
+        metrics_b = evaluate_model_on_dataset(
+            model, validation_dataset_b, subset_size=len(validation_dataset_a)
+        )
 
         interpolation_metrics[step / 100] = {}
         interpolation_metrics[step / 100]["validation_a"] = metrics_a

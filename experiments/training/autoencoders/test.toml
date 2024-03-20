@@ -16,3 +16,5 @@ dataset_text_column = "text"
 dataset_split = "validation"
 target_layer = 0
 target_activation_name = "blocks.0.mlp.hook_post"
+batch_size = 64
+shuffle = True

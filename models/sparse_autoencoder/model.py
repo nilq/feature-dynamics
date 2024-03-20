@@ -19,6 +19,7 @@ class AutoencoderConfig(PretrainedConfig):
         activation_type="relu",
         tied=False,
         l1_coefficient: int = 0.1,
+        torch_dtype: str = "bfloat16",
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -27,6 +28,11 @@ class AutoencoderConfig(PretrainedConfig):
         self.activation_type = activation_type
         self.l1_coefficient = l1_coefficient
         self.tied = tied
+        self.torch_dtype = (
+            torch_dtype
+            if torch_dtype in ["auto", None]
+            else getattr(torch, torch_dtype)
+        )
 
 
 class Autoencoder(PreTrainedModel):
@@ -37,9 +43,15 @@ class Autoencoder(PreTrainedModel):
     def __init__(self, config: AutoencoderConfig):
         super().__init__(config)
         self.config = config
-        self.pre_bias = nn.Parameter(torch.zeros(config.input_size))
-        self.encoder = nn.Linear(config.input_size, config.hidden_size, bias=False)
-        self.latent_bias = nn.Parameter(torch.zeros(config.hidden_size))
+        self.pre_bias = nn.Parameter(
+            torch.zeros(config.input_size, dtype=config.torch_dtype)
+        )
+        self.encoder = nn.Linear(
+            config.input_size, config.hidden_size, bias=False, dtype=config.torch_dtype
+        )
+        self.latent_bias = nn.Parameter(
+            torch.zeros(config.hidden_size), dtype=config.torch_dtype
+        )
         self.l1_coefficient = config.l1_coefficient
 
         # TODO: Add more maybe.
@@ -49,11 +61,12 @@ class Autoencoder(PreTrainedModel):
         if config.tied:
             self.decoder = TiedTranspose(self.encoder)
         else:
-            self.decoder = nn.Linear(config.hidden_size, config.input_size, bias=False)
-
-        self.register_buffer(
-            "stats_last_nonzero", torch.zeros(config.hidden_size, dtype=torch.long)
-        )
+            self.decoder = nn.Linear(
+                config.hidden_size,
+                config.input_size,
+                bias=False,
+                dtype=config.torch_dtype,
+            )
 
     def make_decoder_weights_and_gradient_unit_norm(self) -> None:
         """Make weights and gradients unit norm."""

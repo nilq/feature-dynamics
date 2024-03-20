@@ -17,272 +17,143 @@ import tempfile
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
-
-from models.transformer import Transformer
-from training.artifacts import wandb_save_transformer_states
-
-from training.data import datasplit_from_dataset_config, tokenizer_from_dataset_config
-from training.config import TrainingConfig
-
-from tokenizers import Tokenizer
-from transformers import get_scheduler
-
-app = typer.Typer()
+from models.sparse_autoencoder.model import Autoencoder, AutoencoderConfig
+from transformers import AutoConfig
+from training.autoencoder.config import TrainingConfig
+from transformer_lens import HookedTransformer
+from models.sparse_autoencoder.utils import get_model_activations, hooked_model_fixed
+from training.autoencoder.data import ActivationDataset
+from training.autoencoder.loss import get_reconstruction_loss
 
 
 @torch.no_grad()
-def sample_from_model(
-    model: torch.nn.Module,
-    accelerator: Accelerator,
-    tokenizer: Tokenizer,
-    prompt: str = "Once upon a time",
-    max_length: int = 10,
-    top_k: int = 50,
-):
-    input_ids = tokenizer.encode(prompt).ids
-    input_ids = torch.tensor(input_ids, dtype=torch.long).unsqueeze(0)
-    input_ids = input_ids.to(accelerator.device)
+def get_activation_frequencies(
+    model: HookedTransformer,
+    encoder: Autoencoder,
+    samples: list[str],
+    target_layer: int,
+    target_activation_name: str,
+    device: str = "cuda",
+) -> tuple[torch.Tensor, float]:
+    frequency_scores: torch.Tensor = torch.zeros(
+        encoder.config.hidden_size, dtype=torch.float32
+    ).to(device)
+    total: int = 0
 
-    model.eval()
-    for _ in range(max_length - len(input_ids) - 1):
-        try:
-            logits, *_ = model(input_ids)
-            logits = logits[:, -1, :]
+    for text in samples:
+        activations = get_model_activations(
+            model=model,
+            model_input=text,
+            layer=target_layer,
+            activation_name=target_activation_name,
+        )
+        hidden = encoder(activations)[2]
 
-            top_k_logits, top_k_indices = torch.topk(logits, top_k)
-            probabilities = torch.nn.functional.softmax(top_k_logits, dim=-1)
+        frequency_scores = (hidden > 0).sum(0)
+        total += hidden.shape[0]
 
-            next_token = torch.multinomial(probabilities, num_samples=1)
-            input_ids = torch.cat([input_ids, next_token], dim=-1)
-        except:
-            break
+    frequency_scores /= total
+    dead_percentage = (frequency_scores == 0).float().mean()
 
-    generated_sequence = tokenizer.decode(input_ids.squeeze().tolist())
-    return generated_sequence
-
-
-@torch.no_grad
-def evaluate(
-    model: torch.nn.Module,
-    accelerator: Accelerator,
-    data_loader: DataLoader,
-) -> float:
-    losses: list[float] = []
-    criterion = torch.nn.CrossEntropyLoss()
-
-    for batch in data_loader:
-        input_ids = batch["input_ids"]
-        labels = input_ids[:, 1:]
-        input_ids = input_ids[:, :-1]
-
-        logits, *_ = model(input_ids)
-        loss = criterion(logits.reshape(-1, logits.size(-1)), labels.reshape(-1))
-        losses.append(accelerator.gather_for_metrics(loss.repeat(input_ids.size(0))))
-
-    mean_loss = torch.cat(losses).mean().item()
-
-    try:
-        perplexity = math.exp(mean_loss)
-    except OverflowError:
-        perplexity = float("inf")
-
-    return perplexity
+    return frequency_scores, dead_percentage
 
 
 def train_epoch(
-    model: torch.nn.Module,
     accelerator: Accelerator,
-    data_loader: DataLoader,
+    model: Autoencoder,
     optimizer: Optimizer,
-    learning_rate_scheduler,
-    completed_steps: int,
-    max_train_steps: int,
-    use_wandb: bool,
-    log_interval: int = 500,
-    save_interval: int = 5000,
+    target_model: HookedTransformer,
+    data_loader: DataLoader,
+    training_config: TrainingConfig,
 ):
-    total_loss: float = 0
-    criterion = torch.nn.CrossEntropyLoss()
-
-    for batch in data_loader:
+    for i, batch in enumerate(data_loader):
         with accelerator.accumulate(model):
-            input_ids = batch["input_ids"]
-            labels = input_ids[:, 1:]
-            input_ids = input_ids[:, :-1]
-
-            logits, *_ = model(input_ids)
-            loss = criterion(logits.reshape(-1, logits.size(-1)), labels.reshape(-1))
-
-            total_loss += loss.item()
-
+            loss, _, _, l2_loss, l1_loss = model(batch)
             accelerator.backward(loss)
-            optimizer.zero_grad()
+            model.make_decoder_weights_and_grad_unit_norm()
+
             optimizer.step()
-            learning_rate_scheduler.step()
+            optimizer.zero_grad()
 
         if accelerator.sync_gradients:
-            completed_steps += 1
-
-            if use_wandb:
-                if completed_steps % log_interval == 0 and accelerator.is_main_process:
-                    current_loss = total_loss / completed_steps
-                    current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
+            if training_config.wandb:
+                if i % 100:
                     wandb.log(
                         {
-                            "step_loss": current_loss,
-                            "learning_rate": current_learning_rate,
-                            "step": completed_steps,
+                            "loss": loss.item(),
+                            "l2_loss": l2_loss.item(),
+                            "l1_loss": l1_loss.item(),
                         }
                     )
 
-                if completed_steps % save_interval == 0 and accelerator.is_main_process:
-                    with tempfile.TemporaryDirectory() as checkpoint_dir:
-                        accelerator.save_state(checkpoint_dir)
-                        artifact = wandb.Artifact(
-                            f"model-checkpoint-{completed_steps}", type="model"
-                        )
-                        artifact.add_dir(checkpoint_dir)
-                        wandb.log_artifact(artifact)
+                if i % 1000:
+                    samples = data_loader
 
-        if completed_steps >= max_train_steps:
-            break
+                    reconstruction_score, *_ = get_reconstruction_loss(
+                        model=target_model,
+                        encoder=model,
+                        samples=samples,
+                        target_activation_name=training_config.model.target_activation_name
+                    )
 
-        if os.getenv("TEST"):
-            break
+                    activation_frequencies, dead_percentage = get_activation_frequencies(
+                        model=target_model,
+                        encoder=model,
+                        samples=samples,
+                        target_activation_name=training_config.model.target_activation_name,
+                        target_layer=training_config.model.target_layer,
+                        device=model.device
+                    )
 
-    mean_loss = total_loss / len(data_loader)
-    return completed_steps, mean_loss
+                    wandb.log(
+                        {
+                            "reconstruction_score": reconstruction_score,
+                            "dead_percentage": dead_percentage,
+                            "frequency_below_1e-6": (activation_frequencies < 1e-6).float().mean().item(),
+                            "frequency_below_1e-5": (activation_frequencies < 1e-5).float().mean().item(),
+                        }
+                    )
 
 
 def train(
-    accelerator: Accelerator, model: torch.nn.Module, training_config: TrainingConfig
+    accelerator: Accelerator,
+    model: Autoencoder,
+    target_model: HookedTransformer,
+    data_loader: DataLoader,
+    training_config: TrainingConfig,
 ):
-    total_params = sum(p.numel() for p in model.parameters())
-    print(f"Total parameters: {total_params:_}")
-
     if training_config.wandb and accelerator.is_main_process:
         wandb.init(
             project=training_config.wandb.project,
             notes=training_config.wandb.notes,
-            tags=training_config.wandb.tags + [f"{total_params / 1e6:.1f}M"],
-            config=training_config.dict(),
+            tags=training_config.wandb.tags,
+            config=training_config.model_dump(),
         )
 
-    dataset_split: DatasetSplit = datasplit_from_dataset_config(
-        dataset_config=training_config.dataset_config, accelerator=accelerator
-    )
-
-    accumulation_steps_per_epoch: int = math.ceil(
-        len(dataset_split.train) / training_config.gradient_accumulation_steps
-    )
-    max_train_steps = training_config.epochs * accumulation_steps_per_epoch
-
-    # Lion is too hard.
-    optimizer = torch.optim.AdamW(
-        params=model.parameters(),
+    optimizer = torch.optim.Adam(
+        model.parameters(),
         lr=training_config.learning_rate,
-        betas=tuple(training_config.adam_betas),
-        weight_decay=training_config.weight_decay,
-    )
-
-    learning_rate_scheduler = get_scheduler(
-        name=training_config.learning_rate_scheduler,
-        optimizer=optimizer,
-        num_warmup_steps=training_config.warmup_steps
-        * training_config.gradient_accumulation_steps,
-        num_training_steps=max_train_steps
-        * training_config.gradient_accumulation_steps,
+        betas=(training_config.adam_beta1, training_config.adam_beta2),
     )
 
     (
         model,
         optimizer,
-        dataset_split.train,
-        dataset_split.validation,
-        learning_rate_scheduler,
+        data_loader,
     ) = accelerator.prepare(
         model,
         optimizer,
-        dataset_split.train,
-        dataset_split.validation,
-        learning_rate_scheduler,
+        data_loader,
     )
 
-    num_steps_per_epoch: int = math.ceil(
-        len(dataset_split.train) / training_config.gradient_accumulation_steps
+    train_epoch(
+        accelerator=accelerator,
+        model=model,
+        optimizer=optimizer,
+        target_model=target_model,
+        data_loader=data_loader,
+        training_config=training_config,
     )
-
-    max_train_steps = training_config.epochs * num_steps_per_epoch
-
-    print("Max training steps:", max_train_steps)
-    print(
-        "Total batch size:",
-        training_config.gradient_accumulation_steps * training_config.batch_size,
-    )
-
-    starting_epoch: int = 0
-    completed_steps: int = 0
-
-    # For sample generation.
-    tokenizer = tokenizer_from_dataset_config(
-        dataset_config=training_config.dataset_config
-    )
-
-    for epoch in range(starting_epoch, training_config.epochs):
-        model.train()
-        completed_steps, mean_training_loss = train_epoch(
-            model=model,
-            accelerator=accelerator,
-            data_loader=dataset_split.train,
-            optimizer=optimizer,
-            learning_rate_scheduler=learning_rate_scheduler,
-            completed_steps=completed_steps,
-            max_train_steps=max_train_steps,
-            use_wandb=training_config.wandb is not None,
-            log_interval=training_config.log_interval,
-        )
-
-        model.eval()
-        validation_perplexity = evaluate(
-            model=model,
-            accelerator=accelerator,
-            data_loader=dataset_split.validation,
-        )
-
-        if accelerator.is_main_process:
-            generated_sequence = sample_from_model(
-                model=model,
-                accelerator=accelerator,
-                tokenizer=tokenizer,
-                prompt=training_config.sample_prompt,
-                max_length=training_config.transformer_config.max_seq_len,
-            )
-
-            print(
-                f"Sample at {epoch} (val-perplexity {validation_perplexity}):",
-                generated_sequence,
-            )
-
-            if training_config.wandb:
-                current_learning_rate = learning_rate_scheduler.get_last_lr()[0]
-
-                wandb.log(
-                    {
-                        "train_mean_loss": mean_training_loss,
-                        "validation_perplexity": validation_perplexity,
-                        "learning_rate": current_learning_rate,
-                        "epoch": epoch,
-                        "sampled_sequence": generated_sequence,
-                        "step": completed_steps,
-                    },
-                    step=completed_steps,
-                )
-
-                # Every epoch, save the MLP and attention weights.
-
-                accelerator.wait_for_everyone()
-                unwrapped_model = accelerator.unwrap_model(model)
-                wandb_save_transformer_states(model=unwrapped_model, epoch=epoch)
 
     if training_config.wandb and accelerator.is_main_process:
         accelerator.wait_for_everyone()
@@ -297,21 +168,47 @@ def train(
         wandb.finish()
 
 
-@app.command()
-def start_training_run(file_path: str) -> None:
+def train_autoencoder(file_path: str) -> None:
     accelerator = Accelerator()
     training_config = TrainingConfig.from_toml_path(file_path=file_path)
 
-    model = Transformer(
-        vocab_dim=training_config.transformer_config.vocab_dim,
-        embedding_dim=training_config.transformer_config.embedding_dim,
-        max_seq_len=training_config.transformer_config.max_seq_len,
-        num_layers=training_config.transformer_config.num_layers,
-        num_heads=training_config.transformer_config.num_heads,
+    target_model_config = AutoConfig.from_pretrained(
+        training_config.model.target_model_name
+    )
+    target_model = hooked_model_fixed(training_config.model.target_model_name)
+    model = Autoencoder(
+        AutoencoderConfig(
+            hidden_size=training_config.dictionary_multiplier
+            * target_model_config.intermediate_size,
+            input_size=target_model_config.intermediate_size,
+            tied=training_config.model.tied,
+            l1_coefficient=training_config.model.l1_coefficient,
+            torch_dtype=training_config.model.torch_dtype,
+        )
     )
 
-    train(accelerator=accelerator, model=model, training_config=training_config)
+    dataset = ActivationDataset(
+        dataset_name=training_config.data.dataset_name,
+        dataset_text_column=training_config.data.dataset_text_column,
+        dataset_split=training_config.data.dataset_split,
+        target_layer=training_config.data.target_layer,
+        target_activation_name=training_config.data.target_activation_name,
+    )
+
+    data_loader = DataLoader(
+        dataset=dataset,
+        batch_size=training_config.data.batch_size,
+        shuffle=training_config.data.shuffle,
+    )
+
+    train(
+        accelerator=accelerator,
+        model=model,
+        target_model=target_model,
+        data_loader=data_loader,
+        training_config=training_config,
+    )
 
 
 if __name__ == "__main__":
-    app()
+    typer.run(train_autoencoder)

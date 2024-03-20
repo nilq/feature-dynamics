@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, Field
 
+from training.transformer.config import WandbConfig
+
 
 class AutoencoderDatasetConfig(BaseModel):
     """Configuration of dataset to train dictionary model."""
@@ -27,4 +29,7 @@ class TrainingConfig(BaseModel):
     dictionary_multiplier: float = Field(
         ...,
         description="Dictionar activation multiplier, how many more dimensions than activations.",
+    )
+    wandb: WandbConfig | None = Field(
+        default=None, description="Configuration of Weights & Biases."
     )
