@@ -50,7 +50,7 @@ def get_activation_frequencies(
             layer=target_layer,
             activation_name=target_activation_name,
         )
-        hidden = encoder(activations)[2]
+        hidden = encoder(activations, use_ghost_gradients=False)[2]
         frequency_scores += (hidden > 0).sum(0)
         total += hidden.shape[0]
 
@@ -89,9 +89,12 @@ def train_epoch(
     target_model: HookedTransformer,
     data_loader: DataLoader,
     training_config: TrainingConfig,
+    forward_passes_since_last_activation: torch.Tensor,
 ):
     sample_loader = get_uniform_sample_loader(
-        data_loader.dataset.text_dataset, training_config.reconstruction_loss_sample_amount, batch_size=1
+        data_loader.dataset.text_dataset,
+        training_config.reconstruction_loss_sample_amount,
+        batch_size=1,
     )
     texts = [
         torch.tensor(sample["input_ids"], device=target_model.cfg.device)
@@ -99,13 +102,34 @@ def train_epoch(
     ]
 
     data_loader = tqdm(data_loader, desc="Training")
+    ghost_gradient_neuron_mask: torch.Tensor | None = None
 
     for i, batch in enumerate(data_loader):
         with accelerator.accumulate(model):
-            loss, _, _, l2_loss, l1_loss = model(batch)
+            if training_config.use_ghost_gradients:
+                ghost_gradient_neuron_mask = (
+                    forward_passes_since_last_activation[i]
+                    > training_config.dead_feature_window
+                ).bool()
+
+            model.train()
+            loss, _, latents_pre_act, l2_loss, l1_loss = model(
+                batch,
+                use_ghost_gradients=training_config.use_ghost_gradients,
+                ghost_gradient_neuron_mask=ghost_gradient_neuron_mask
+            )
+
+            if training_config.use_ghost_gradients:
+                # Feature activation book-keeping.
+                did_fire = ((latents_pre_act > 0).float().sum(-2) > 0).any(dim=0)
+                forward_passes_since_last_activation += 1
+                forward_passes_since_last_activation[did_fire] = 0
 
             accelerator.backward(loss)
             model.make_decoder_weights_and_gradient_unit_norm()
+
+            # TODO: Remove gradients parallel to decoder directions.
+            # Not sure if necessary before optimizer step.
 
             optimizer.step()
             optimizer.zero_grad()
@@ -124,31 +148,38 @@ def train_epoch(
                     )
 
                 if i % 1000:
+                    # TODO: Configurable interval, reset feature sparsity.
                     reconstruction_score, *_ = get_reconstruction_loss(
                         model=target_model,
                         encoder=model,
                         samples=texts,
-                        target_activation_name=training_config.data.target_activation_name
-                    )
-
-                    activation_frequencies, dead_percentage = get_activation_frequencies(
-                        model=target_model,
-                        encoder=model,
-                        samples=texts,
                         target_activation_name=training_config.data.target_activation_name,
-                        target_layer=training_config.data.target_layer,
-                        device=model.device
                     )
 
-                    frequency_below_1e_minus_6 = (activation_frequencies < 1e-6).float().mean().item()
-                    frequency_below_1e_minus_5 = (activation_frequencies < 1e-5).float().mean().item()
+                    activation_frequencies, dead_percentage = (
+                        get_activation_frequencies(
+                            model=target_model,
+                            encoder=model,
+                            samples=texts,
+                            target_activation_name=training_config.data.target_activation_name,
+                            target_layer=training_config.data.target_layer,
+                            device=model.device,
+                        )
+                    )
+
+                    frequency_below_1e_minus_6 = (
+                        (activation_frequencies < 1e-6).float().mean().item()
+                    )
+                    frequency_below_1e_minus_5 = (
+                        (activation_frequencies < 1e-5).float().mean().item()
+                    )
 
                     wandb.log(
                         {
                             "reconstruction_score": reconstruction_score,
                             "dead_percentage": dead_percentage,
                             "frequency_below_1e-6": frequency_below_1e_minus_6,
-                            "frequency_below_1e-5": frequency_below_1e_minus_5
+                            "frequency_below_1e-5": frequency_below_1e_minus_5,
                         }
                     )
 
@@ -189,6 +220,12 @@ def train(
         data_loader,
     )
 
+    # Used for ghost gradient mask.
+    forward_passes_since_last_activation = torch.zeros(
+        model.config.hidden_size,
+        device=model.device,
+    )
+
     train_epoch(
         accelerator=accelerator,
         model=model,
@@ -196,6 +233,7 @@ def train(
         target_model=target_model,
         data_loader=data_loader,
         training_config=training_config,
+        forward_passes_since_last_activation=forward_passes_since_last_activation,
     )
 
     if training_config.wandb and accelerator.is_main_process:
@@ -218,11 +256,15 @@ def train_autoencoder(file_path: str) -> None:
     target_model_config = AutoConfig.from_pretrained(
         training_config.data.target_model_name
     )
-    target_model = hooked_model_fixed(training_config.data.target_model_name, dtype=training_config.model.torch_dtype)
+    target_model = hooked_model_fixed(
+        training_config.data.target_model_name, dtype=training_config.model.torch_dtype
+    )
     model = Autoencoder(
         AutoencoderConfig(
-            hidden_size=int(training_config.dictionary_multiplier
-            * target_model_config.intermediate_size),
+            hidden_size=int(
+                training_config.dictionary_multiplier
+                * target_model_config.intermediate_size
+            ),
             input_size=int(target_model_config.intermediate_size),
             tied=training_config.model.tied,
             l1_coefficient=training_config.model.l1_coefficient,
@@ -238,7 +280,7 @@ def train_autoencoder(file_path: str) -> None:
         target_activation_name=training_config.data.target_activation_name,
         model=target_model,
         tokenizer_id=training_config.data.tokenizer_id,
-        block_size=training_config.data.block_size
+        block_size=training_config.data.block_size,
     )
 
     data_loader = DataLoader(

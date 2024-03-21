@@ -4,6 +4,8 @@ adam_beta1 = 0.9
 adam_beta2 = 0.99
 dictionary_multiplier = 32
 reconstruction_loss_sample_amount = 1000
+use_ghost_gradients = true
+dead_feature_window = 1000
 
 [training.model]
 l1_coefficient = 3e-4

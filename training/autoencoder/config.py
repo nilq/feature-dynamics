@@ -18,7 +18,9 @@ class AutoencoderDatasetConfig(BaseModel):
     target_model_name: str = Field(..., description="Name of model to target.")
     batch_size: int = Field(..., description="Batch size.")
     shuffle: int = Field(..., description="Whether to shuffle data.")
-    tokenizer_id: str = Field(..., description="ID of tokenizer for blocked tokenization.")
+    tokenizer_id: str = Field(
+        ..., description="ID of tokenizer for blocked tokenization."
+    )
     block_size: int = Field(..., description="Block size of data.")
 
 
@@ -32,7 +34,15 @@ class TrainingConfig(BaseModel):
     learning_rate: float = Field(..., description="Learning rate.")
     adam_beta1: float = Field(..., description="Adam optimizer beta-1 value.")
     adam_beta2: float = Field(..., description="Adam optimizer beta-2 value.")
-    reconstruction_loss_sample_amount: int = Field(..., description="Number of samples to use to compute reconstruction loss.")
+    reconstruction_loss_sample_amount: int = Field(
+        ..., description="Number of samples to use to compute reconstruction loss."
+    )
+    use_ghost_gradients: bool = Field(
+        ..., description="Whether to use ghost gradients."
+    )
+    dead_feature_window: int | None = Field(
+        ..., description="Dead feature window for ghost gradients."
+    )
     dictionary_multiplier: float = Field(
         ...,
         description="Dictionar activation multiplier, how many more dimensions than activations.",

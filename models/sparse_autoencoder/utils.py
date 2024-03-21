@@ -17,7 +17,9 @@ def hooked_model_fixed(model_name: str, dtype: str) -> HookedTransformer:
     Returns:
         HookedTransformer: Hooked transformer.
     """
-    model = HookedTransformer.from_pretrained(model_name, center_writing_weights=False, dtype=dtype)
+    model = HookedTransformer.from_pretrained(
+        model_name, center_writing_weights=False, dtype=dtype
+    )
     vanilla_tokenizer = AutoTokenizer.from_pretrained(model_name)
     model.tokenizer = vanilla_tokenizer
 

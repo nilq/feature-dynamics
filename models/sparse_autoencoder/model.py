@@ -24,7 +24,8 @@ def normalized_mean_squared_error(
     original_input: torch.Tensor,
 ) -> torch.Tensor:
     return (
-        ((reconstruction - original_input) ** 2).mean(dim=1) / (original_input**2).mean(dim=1)
+        ((reconstruction - original_input) ** 2).mean(dim=1)
+        / (original_input**2).mean(dim=1)
     ).mean()
 
 
@@ -143,16 +144,23 @@ class Autoencoder(PreTrainedModel):
         return self.decoder(latents) + self.pre_bias
 
     def forward(
-        self, x: torch.Tensor
+        self,
+        x: torch.Tensor,
+        use_ghost_gradients: bool,
+        ghost_gradient_neuron_mask: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Forward pass.
 
         Args:
             x (torch.Tensor): Input data (shape: [batch, input_size...]).
+            use_ghost_gradients (bool): Whether to use ghost gradients.
+            ghost_gradient_neuron_mask (torch.Tensor | None, optional):
+                Dead neuron mask, required for ghost gradients.
+                Defaults to None.
 
         Returns:
             tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-                - Loss, i.e. L2 + L1.
+                - Loss, i.e. L2 + L1 + ghost residual if set.
                 - Reconstructed data (shape: [batch, input_size]).
                 - Autoencoder latents (shape: [batch, hidden_size]).
                 - L2 loss.
@@ -162,9 +170,46 @@ class Autoencoder(PreTrainedModel):
         latents = self.encode(x)
         reconstructed = self.decode(latents)
 
+        l2_loss_ghost_residual: torch.Tensor = torch.tensor(
+            0.0, dtype=self.dtype, device=self.device
+        )
+
+        # Ghost gradient protocol, helps keep neurons alive.
+        # https://transformer-circuits.pub/2024/jan-update/index.html#dict-learning-resampling
+        if (
+            self.training
+            and use_ghost_gradients
+            and ghost_gradient_neuron_mask
+            and ghost_gradient_neuron_mask.sum() > 0
+        ):
+            residual: torch.Tensor = x - reconstructed
+            residual_centered: torch.Tensor = residual - residual.mean(
+                dim=0, keepdim=True
+            )
+            l2_norm_residual: torch.Tensor = torch.norm(residual, dim=-1)
+
+            dead_neuron_feature_activations = torch.exp(
+                latents_pre_act[:, ghost_gradient_neuron_mask]
+            )
+            ghosts = (
+                dead_neuron_feature_activations
+                @ self.decoder.weight.data[ghost_gradient_neuron_mask, :]
+            )
+            l2_norm_ghosts = torch.norm(ghosts, dim=-1)
+            norm_scaling_factor = l2_norm_residual / (1e-6 + l2_norm_ghosts * 2)
+            ghosts *= norm_scaling_factor[:, None].detach()
+
+            l2_loss_ghost_residual = (ghosts.float() - residual.float()).pow(2) / (
+                residual_centered.detach() ** 2
+            ).sum(-1, keepdim=True).sqrt()
+            l2_rescaling_factor = (l2_loss / (l2_loss_ghost_residual + 1e-6)).detach()
+            l2_loss_ghost_residual = (
+                l2_rescaling_factor * l2_loss_ghost_residual
+            ).mean()
+
         l2_loss = (reconstructed.float() - x.float()).pow(2).sum(-1).mean()
         l1_loss = self.l1_coefficient * (latents.float().abs().sum())
-        loss = l2_loss + l1_loss
+        loss = l2_loss + l1_loss + l2_loss_ghost_residual
 
         return loss, reconstructed, latents_pre_act, l2_loss, l1_loss
 

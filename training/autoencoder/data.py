@@ -25,7 +25,7 @@ class ActivationDataset(Dataset):
         target_activation_name: str,
         tokenizer_id: str,
         dtype: str = "bfloat32",
-        block_size: int = 1024
+        block_size: int = 1024,
     ) -> None:
         """Initialise with model/layer/activation target and source text dataset.
 
@@ -47,7 +47,7 @@ class ActivationDataset(Dataset):
                 dataset_id=dataset_id,
                 dataset_text_key=dataset_text_key,
                 tokenizer_id=tokenizer_id,
-                block_size=block_size
+                block_size=block_size,
             ),
             training_config=Accelerator(),
         )[0 if dataset_split == "train" else 1]
@@ -74,7 +74,9 @@ class ActivationDataset(Dataset):
             torch.Tensor:
                 Activations of target layer activation for text data at index.
         """
-        text: str = torch.tensor(self.text_dataset[index]["input_ids"], device=self.model.cfg.device).unsqueeze(0)
+        text: str = torch.tensor(
+            self.text_dataset[index]["input_ids"], device=self.model.cfg.device
+        ).unsqueeze(0)
 
         activations = get_model_activations(
             model=self.model,

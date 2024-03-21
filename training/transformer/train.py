@@ -21,7 +21,11 @@ from torch.optim import Optimizer
 from models.transformer import Transformer
 from training.artifacts import wandb_save_transformer_states
 
-from training.data import datasplit_from_dataset_config, tokenizer_from_dataset_config, DatasetSplit
+from training.data import (
+    datasplit_from_dataset_config,
+    tokenizer_from_dataset_config,
+    DatasetSplit,
+)
 from training.config import TrainingConfig
 
 from tokenizers import Tokenizer
@@ -215,8 +219,7 @@ def train(
     print("Max training steps:", max_train_steps)
     print(
         "Total batch size:",
-        training_config.gradient_accumulation_steps
-        * training_config.batch_size,
+        training_config.gradient_accumulation_steps * training_config.batch_size,
     )
 
     starting_epoch: int = 0

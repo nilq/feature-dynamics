@@ -12,7 +12,7 @@ from transformer_lens import HookedTransformer
 
 
 def replacement_hook(mlp_post, hook, encoder: Autoencoder):
-    mlp_post_reconstr = encoder(mlp_post)[1]
+    mlp_post_reconstr = encoder(mlp_post, use_ghost_gradients=False)[1]
     return mlp_post_reconstr
 
 

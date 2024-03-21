@@ -8,13 +8,9 @@ from torch.nn import functional as F
 from models.transformer.encoding import RotaryPositionalEncoding
 
 
-
 class Attention(nn.Module):
     def __init__(
-        self,
-        embedding_dim: int,
-        num_heads: int,
-        dropout_rate: float = 0.1
+        self, embedding_dim: int, num_heads: int, dropout_rate: float = 0.1
     ) -> None:
         super().__init__()
 
@@ -44,7 +40,9 @@ class Attention(nn.Module):
         attention_output = attention_scores @ value
 
         # Rearrange and transform the output
-        attention_output = einops.rearrange(attention_output, "b head l k -> b l (head k)")
+        attention_output = einops.rearrange(
+            attention_output, "b head l k -> b l (head k)"
+        )
         return self.dropout(self.out_transform(attention_output), attention_scores)
 
 
@@ -86,10 +84,16 @@ class TransformerBlock(nn.Module):
         attention_dropout_rate: float = 0.1,
     ) -> None:
         super().__init__()
-        self.attention = Attention(embedding_dim=embedding_dim, num_heads=num_heads, dropout_rate=attention_dropout_rate)
+        self.attention = Attention(
+            embedding_dim=embedding_dim,
+            num_heads=num_heads,
+            dropout_rate=attention_dropout_rate,
+        )
         self.attention_norm = RMSNorm(dim=embedding_dim, epsilon=norm_epsilon)
         self.feed_forward_norm = RMSNorm(dim=embedding_dim, epsilon=norm_epsilon)
-        self.feed_forward = FeedForward(input_dim=embedding_dim, hidden_dim=hidden_dim, dropout_rate=dropout_rate)
+        self.feed_forward = FeedForward(
+            input_dim=embedding_dim, hidden_dim=hidden_dim, dropout_rate=dropout_rate
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         attention_output, attention_scores = self.attention(self.attention_norm(x))
@@ -111,7 +115,7 @@ class Transformer(nn.Module):
         num_heads: int,
         block_hidden_dim: int = 0,
         dropout_rate: float = 0.1,
-        attention_dropout_rate = 0.1
+        attention_dropout_rate=0.1,
     ) -> None:
         super().__init__()
 
