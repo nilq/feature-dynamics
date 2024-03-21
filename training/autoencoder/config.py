@@ -54,6 +54,7 @@ class TrainingConfig(BaseModel):
     wandb: WandbConfig | None = Field(
         default=None, description="Configuration of Weights & Biases."
     )
+    seed: int = Field(..., description="Seed for training.")
 
     @classmethod
     def from_toml_path(cls, file_path: str) -> Self:

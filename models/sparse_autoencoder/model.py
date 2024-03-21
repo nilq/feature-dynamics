@@ -97,6 +97,19 @@ class Autoencoder(PreTrainedModel):
                 dtype=config.torch_dtype,
             )
 
+    @torch.no_grad()
+    def remove_gradients_parallel_to_decoder_directions(self):
+        parallel_component = (self.decoder.weight.grad * self.decoder.weight.data).sum(
+            dim=1
+        )
+        expanded_parallel_component = parallel_component.unsqueeze(1).expand_as(
+            self.decoder.weight.grad
+        )
+        self.decoder.weight.grad -= (
+            expanded_parallel_component * self.decoder.weight.data
+        )
+
+    @torch.no_grad()
     def make_decoder_weights_and_gradient_unit_norm(self) -> None:
         """Make weights and gradients unit norm."""
         norm_decoder_weights = self.decoder.weight / self.decoder.weight.norm(

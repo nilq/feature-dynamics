@@ -15,6 +15,9 @@ import math
 import wandb
 import tempfile
 
+import seaborn as sns
+import matplotlib.pyplot as plt
+
 from tqdm import tqdm
 from itertools import islice
 from accelerate import Accelerator
@@ -27,6 +30,9 @@ from transformer_lens import HookedTransformer
 from models.sparse_autoencoder.utils import get_model_activations, hooked_model_fixed
 from training.autoencoder.data import ActivationDataset
 from training.autoencoder.loss import get_reconstruction_loss
+
+# Useful to set all seeds.
+from transformers import set_seed
 
 
 @torch.no_grad()
@@ -104,7 +110,11 @@ def train_epoch(
     data_loader = tqdm(data_loader, desc="Training")
     ghost_gradient_neuron_mask: torch.Tensor | None = None
 
+    active_tokens = 0
+
     for i, batch in enumerate(data_loader):
+        active_tokens += batch.size(0) * batch.size(1)
+
         with accelerator.accumulate(model):
             if training_config.use_ghost_gradients:
                 ghost_gradient_neuron_mask = (
@@ -116,7 +126,7 @@ def train_epoch(
             loss, _, latents_pre_act, l2_loss, l1_loss = model(
                 batch,
                 use_ghost_gradients=training_config.use_ghost_gradients,
-                ghost_gradient_neuron_mask=ghost_gradient_neuron_mask
+                ghost_gradient_neuron_mask=ghost_gradient_neuron_mask,
             )
 
             if training_config.use_ghost_gradients:
@@ -126,10 +136,11 @@ def train_epoch(
                 forward_passes_since_last_activation[did_fire] = 0
 
             accelerator.backward(loss)
+
             model.make_decoder_weights_and_gradient_unit_norm()
 
-            # TODO: Remove gradients parallel to decoder directions.
-            # Not sure if necessary before optimizer step.
+            # NOTE: This might inhibit training.
+            model.remove_gradients_parallel_to_decoder_directions()
 
             optimizer.step()
             optimizer.zero_grad()
@@ -148,7 +159,7 @@ def train_epoch(
                     )
 
                 if i % 1000:
-                    # TODO: Configurable interval, reset feature sparsity.
+                    # TODO: Configurable interval.
                     reconstruction_score, *_ = get_reconstruction_loss(
                         model=target_model,
                         encoder=model,
@@ -167,6 +178,13 @@ def train_epoch(
                         )
                     )
 
+                    feature_sparsity = activation_frequencies / active_tokens
+                    active_tokens = 0
+
+                    log_feature_sparsity = (
+                        torch.log10(feature_sparsity + 1e-10).detach().cpu()
+                    )
+
                     frequency_below_1e_minus_6 = (
                         (activation_frequencies < 1e-6).float().mean().item()
                     )
@@ -174,12 +192,26 @@ def train_epoch(
                         (activation_frequencies < 1e-5).float().mean().item()
                     )
 
+                    plt.figure(figsize=(10, 6))  # You can set the size of the figure
+                    sns.kdeplot(log_feature_sparsity.numpy(), shade=True)
+                    plt.xlabel("log_10(Feature density)")
+                    plt.ylabel("Frequency")
+                    plt.title("Feature density")
+
+                    plot_filename = "density_plot.png"
+                    plt.savefig(plot_filename)
+                    plt.close()
+
+                    wandb_histogram = wandb.Histogram(log_feature_sparsity.numpy())
+
                     wandb.log(
                         {
                             "reconstruction_score": reconstruction_score,
                             "dead_percentage": dead_percentage,
                             "frequency_below_1e-6": frequency_below_1e_minus_6,
                             "frequency_below_1e-5": frequency_below_1e_minus_5,
+                            "plots/feature_density_line_chart": wandb_histogram,
+                            "plots/feature_kdeplot": wandb.Image(plot_filename),
                         }
                     )
 
@@ -252,6 +284,7 @@ def train(
 def train_autoencoder(file_path: str) -> None:
     accelerator = Accelerator()
     training_config = TrainingConfig.from_toml_path(file_path=file_path)
+    set_seed(training_config.seed)
 
     target_model_config = AutoConfig.from_pretrained(
         training_config.data.target_model_name

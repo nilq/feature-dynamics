@@ -81,7 +81,7 @@ def slerp_parameters_at_step(step: int) -> dict[str, Any]:
 
 
 def ties_parameters_at_step(step: int) -> dict[str, Any]:
-    return {"density": step / 100, "weight": 0.5}
+    return {"density": (step + 0.001) / 100, "weight": 0.5}
 
 
 def interpolate(config_path: str, merge_method: str) -> None:
