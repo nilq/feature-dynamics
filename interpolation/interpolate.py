@@ -118,7 +118,7 @@ def interpolate(config_path: str, merge_method: str) -> None:
     print(f"  - B: {metrics_b}")
 
     for step in range(
-        0,
+        1,
         100 + int(interpolation_config.stride * 100),
         int(interpolation_config.stride * 100),
     ):

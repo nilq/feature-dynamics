@@ -193,7 +193,7 @@ def train_epoch(
                     )
 
                     plt.figure(figsize=(10, 6))  # You can set the size of the figure
-                    sns.kdeplot(log_feature_sparsity.numpy(), shade=True)
+                    sns.histplot(log_feature_sparsity.numpy())
                     plt.xlabel("log_10(Feature density)")
                     plt.ylabel("Frequency")
                     plt.title("Feature density")
