@@ -1,7 +1,11 @@
 """Activation data."""
 
+from __future__ import annotations
+from copy import copy
+
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Subset
+from torch.utils.data.dataset import random_split
 from transformer_lens import HookedTransformer
 
 from datasets import load_dataset
@@ -10,6 +14,32 @@ from accelerate import Accelerator
 from models.sparse_autoencoder.utils import get_model_activations
 from training.transformer.config import DatasetConfig
 from training.transformer.data import datasplit_from_dataset_config
+
+
+def split_dataset(dataset: ActivationDataset, validation_percentage: float) -> tuple[Dataset, Dataset]:
+    """Split a dataset into training and validation sets.
+
+    Args:
+        dataset (Dataset): The dataset to split.
+        validation_percentage (float): The fraction of the dataset to allocate to the validation set.
+
+    Returns:
+        tuple[Dataset, Dataset]: Training and validation datasets.
+    """
+    # Calculate the number of samples to include in each set
+    total_size = len(dataset.text_dataset)
+    val_size = int(total_size * validation_percentage)
+    train_size = total_size - val_size
+
+    train_indices, val_indices = random_split(range(total_size), [train_size, val_size])
+
+    train_dataset = copy(dataset)
+    validation_dataset = copy(dataset)
+
+    train_dataset.text_dataset = Subset(dataset.text_dataset, train_indices.indices)
+    validation_dataset.text_dataset = Subset(dataset.text_dataset, val_indices.indices)
+
+    return train_dataset, validation_dataset
 
 
 class ActivationDataset(Dataset):

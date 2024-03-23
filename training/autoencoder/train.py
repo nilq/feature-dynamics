@@ -28,7 +28,7 @@ from transformers import AutoConfig
 from training.autoencoder.config import TrainingConfig
 from transformer_lens import HookedTransformer
 from models.sparse_autoencoder.utils import get_model_activations, hooked_model_fixed
-from training.autoencoder.data import ActivationDataset
+from training.autoencoder.data import ActivationDataset, split_dataset
 from training.autoencoder.loss import get_reconstruction_loss
 
 # Useful to set all seeds.
@@ -94,11 +94,12 @@ def train_epoch(
     optimizer: Optimizer,
     target_model: HookedTransformer,
     data_loader: DataLoader,
+    data_loader_eval: DataLoader,
     training_config: TrainingConfig,
     forward_passes_since_last_activation: torch.Tensor,
 ):
     sample_loader = get_uniform_sample_loader(
-        data_loader.dataset.text_dataset,
+        data_loader_eval.dataset.text_dataset,
         training_config.reconstruction_loss_sample_amount,
         batch_size=1,
     )
@@ -226,6 +227,7 @@ def train(
     model: Autoencoder,
     target_model: HookedTransformer,
     data_loader: DataLoader,
+    data_loader_eval: DataLoader,
     training_config: TrainingConfig,
 ):
     if training_config.wandb and accelerator.is_main_process:
@@ -264,6 +266,7 @@ def train(
         optimizer=optimizer,
         target_model=target_model,
         data_loader=data_loader,
+        data_loader_eval=data_loader_eval,
         training_config=training_config,
         forward_passes_since_last_activation=forward_passes_since_last_activation,
     )
@@ -316,8 +319,16 @@ def train_autoencoder(file_path: str) -> None:
         block_size=training_config.data.block_size,
     )
 
-    data_loader = DataLoader(
-        dataset=dataset,
+    dataset_train, dataset_validation = split_dataset(dataset=dataset, validation_percentage=training_config.data.validation_percentage)
+
+    data_loader_train = DataLoader(
+        dataset=dataset_train,
+        batch_size=training_config.data.batch_size,
+        shuffle=training_config.data.shuffle,
+    )
+
+    data_loader_eval = DataLoader(
+        dataset=dataset_validation,
         batch_size=training_config.data.batch_size,
         shuffle=training_config.data.shuffle,
     )
@@ -326,7 +337,8 @@ def train_autoencoder(file_path: str) -> None:
         accelerator=accelerator,
         model=model,
         target_model=target_model,
-        data_loader=data_loader,
+        data_loader=data_loader_train,
+        data_loader_eval=data_loader_eval,
         training_config=training_config,
     )
 
