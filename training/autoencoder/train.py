@@ -123,6 +123,9 @@ def train_epoch(
                     > training_config.dead_feature_window
                 ).bool()
 
+                print("Max dead length:", forward_passes_since_last_activation[i].max())
+                print("Ghost gradient mask, any non-0 mask:", ghost_gradient_neuron_mask.any())
+
             model.train()
             loss, _, latents_pre_act, l2_loss, l1_loss = model(
                 batch,
@@ -133,13 +136,13 @@ def train_epoch(
             if training_config.use_ghost_gradients:
                 # Feature activation book-keeping.
                 did_fire = ((latents_pre_act > 0).float().sum(-2) > 0).any(dim=0)
+                print("Fire mean", did_fire.float().mean())
                 forward_passes_since_last_activation += 1
                 forward_passes_since_last_activation[did_fire] = 0
 
             accelerator.backward(loss)
 
             model.make_decoder_weights_and_gradient_unit_norm()
-
             # NOTE: This might inhibit training.
             model.remove_gradients_parallel_to_decoder_directions()
 
@@ -192,7 +195,14 @@ def train_epoch(
                     frequency_below_1e_minus_5 = (
                         (activation_frequencies < 1e-5).float().mean().item()
                     )
+                    frequency_below_1e_minus_2 = (
+                        (activation_frequencies < 1e-2).float().mean().item()
+                    )
 
+                    # Explainability.
+                    l0_mean = (activation_frequencies > 0).float().sum(-1).detach().mean().item()
+
+                    # Feature sparsity histogram.
                     plt.figure(figsize=(10, 6))  # You can set the size of the figure
                     sns.histplot(log_feature_sparsity.numpy())
                     plt.xlabel("log_10(Feature density)")
@@ -211,6 +221,8 @@ def train_epoch(
                             "dead_percentage": dead_percentage,
                             "frequency_below_1e-6": frequency_below_1e_minus_6,
                             "frequency_below_1e-5": frequency_below_1e_minus_5,
+                            "frequency_below_1e-2": frequency_below_1e_minus_2,
+                            "l0_mean": l0_mean,
                             "plots/feature_density_line_chart": wandb_histogram,
                             "plots/feature_kdeplot": wandb.Image(plot_filename),
                         }
@@ -220,6 +232,7 @@ def train_epoch(
                     print("Dead percentage:", dead_percentage)
                     print("Frequency below 1e-6:", frequency_below_1e_minus_6)
                     print("Frequency below 1e-5:", frequency_below_1e_minus_5)
+                    print("Frequency below 1e-2:", frequency_below_1e_minus_2)
 
 
 def train(
@@ -317,6 +330,42 @@ def train_autoencoder(file_path: str) -> None:
         model=target_model,
         tokenizer_id=training_config.data.tokenizer_id,
         block_size=training_config.data.block_size,
+    )
+
+    model = Autoencoder(
+        AutoencoderConfig(
+            hidden_size=int(
+                training_config.dictionary_multiplier
+                * target_model_config.intermediate_size
+            ),
+            input_size=int(target_model_config.intermediate_size),
+            tied=training_config.model.tied,
+            l1_coefficient=training_config.model.l1_coefficient,
+            torch_dtype=training_config.model.torch_dtype,
+        )
+    )
+
+    geomatric_median_sample_loader = get_uniform_sample_loader(
+        dataset.text_dataset,
+        int(len(dataset.text_dataset) * 0.2),  # TODO: Don't hardcode geometric median sample count.
+        batch_size=1,
+    )
+    samples = [
+        torch.tensor(sample["input_ids"], device=target_model.cfg.device)
+        for sample in geomatric_median_sample_loader
+    ]
+    all_activations = [
+        get_model_activations(
+            model=target_model,
+            model_input=text,
+            layer=training_config.data.target_layer,
+            activation_name=training_config.data.target_activation_name
+        )
+        for text in tqdm(samples, desc="Gathering model activations")
+    ]
+
+    model.initialise_decoder_bias_with_geometric_median(
+        all_activations=torch.vstack(all_activations)
     )
 
     dataset_train, dataset_validation = split_dataset(dataset=dataset, validation_percentage=training_config.data.validation_percentage)
