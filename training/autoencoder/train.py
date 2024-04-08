@@ -162,6 +162,18 @@ def train_epoch(
                         }
                     )
 
+                # TODO: Don't hack this. This is just temporary. Tired.
+                if i % 30000 and accelerator.is_main_process:# and reconstruction_score > 0.4:
+                    with tempfile.TemporaryDirectory() as checkpoint_dir:
+                        accelerator.save_state(checkpoint_dir)
+                        artifact = wandb.Artifact(
+                            f"model-checkpoint-{i}",
+                            type="model",
+                            description=f"Model checkpoint at step {i}"
+                        )
+                        artifact.add_dir(checkpoint_dir)
+                        wandb.log_artifact(artifact)
+
                 if i % 1000:
                     # TODO: Configurable interval.
                     reconstruction_score, *_ = get_reconstruction_loss(
@@ -347,7 +359,7 @@ def train_autoencoder(file_path: str) -> None:
 
     geomatric_median_sample_loader = get_uniform_sample_loader(
         dataset.text_dataset,
-        int(len(dataset.text_dataset) * 0.2),  # TODO: Don't hardcode geometric median sample count.
+        int(len(dataset.text_dataset) * 0.1),  # TODO: Don't hardcode geometric median sample count.
         batch_size=1,
     )
     samples = [
