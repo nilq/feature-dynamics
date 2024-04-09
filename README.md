@@ -29,7 +29,7 @@ Train decoder-only models.
 poetry run python training/transformer/train.py <experiment.toml>
 ```
 
-#### Sparse autoencoder
+#### Autoencoder
 
 Train sparse autoencoder.
 
@@ -40,6 +40,14 @@ poetry run python training/autoencoder/train.py <experiment.toml>
 Using TransformerLens's `HookedTransformer` (specifically via [my hacked fork](https://github.com/nilq/TransformerLens)*) to train sparse autoencoders.
 
 \* This one is required to hook custom Mistral models.
+
+### Evaluation
+
+#### Autoencoder
+
+Evaluation of pretrained autoencoders.
+
+This module contains functionality to make target models use autoencoder reconstructions in place of existing activations, by using a forward pass hook. 
 
 ### Interpolation
 
