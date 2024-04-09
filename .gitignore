@@ -164,3 +164,4 @@ wandb/
 wimbd/*
 !wimbd/README.md
 results/
+artifacts/

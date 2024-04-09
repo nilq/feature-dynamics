@@ -1,0 +1,3 @@
+[autoencoder-evaluation]
+wandb_url = "https://wandb.ai/nilq/sparse-autoencoder/runs/m1sjchj2"
+wandb_model_version = "latest"

@@ -253,9 +253,11 @@ class Autoencoder(PreTrainedModel):
 
         x_centered = x - x.mean(dim=0, keepdim=True)
         l2_loss = (torch.pow((reconstructed - x.float()), 2) / 
-            (x_centered ** 2).sum(dim=-1, keepdim=True).sqrt()).mean()
+            x_centered.norm(dim=-1, keepdim=True)).mean()
+            # (x_centered ** 2).sum(dim=-1, keepdim=True).sqrt()).mean()
 
-        l1_loss = self.l1_coefficient * (latents.float().abs().sum())
+        sparsity = latents.norm(p=1.0, dim=1).mean()
+        l1_loss = self.l1_coefficient * sparsity#(latents.float().abs().sum())
         loss = l2_loss + l1_loss + l2_loss_ghost_residual
 
         return loss, reconstructed, latents, l2_loss, l1_loss

@@ -32,6 +32,7 @@ class ModelConfig(BaseModel):
 
 
 class TrainingConfig(BaseModel):
+    epochs: int = Field(default=1, description="Number of epochs to train.")
     learning_rate: float = Field(..., description="Learning rate.")
     adam_beta1: float = Field(..., description="Adam optimizer beta-1 value.")
     adam_beta2: float = Field(..., description="Adam optimizer beta-2 value.")

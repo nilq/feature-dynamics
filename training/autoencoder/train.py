@@ -153,7 +153,7 @@ def train_epoch(
 
         if accelerator.sync_gradients:
             if training_config.wandb:
-                if i % 100:
+                if i % 2000:
                     wandb.log(
                         {
                             "loss": loss.item(),
@@ -162,19 +162,7 @@ def train_epoch(
                         }
                     )
 
-                # TODO: Don't hack this. This is just temporary. Tired.
-                if i % 30000 and accelerator.is_main_process:# and reconstruction_score > 0.4:
-                    with tempfile.TemporaryDirectory() as checkpoint_dir:
-                        accelerator.save_state(checkpoint_dir)
-                        artifact = wandb.Artifact(
-                            f"model-checkpoint-{i}",
-                            type="model",
-                            description=f"Model checkpoint at step {i}"
-                        )
-                        artifact.add_dir(checkpoint_dir)
-                        wandb.log_artifact(artifact)
-
-                if i % 1000:
+                if i % 20000:
                     # TODO: Configurable interval.
                     reconstruction_score, *_ = get_reconstruction_loss(
                         model=target_model,
@@ -285,16 +273,40 @@ def train(
         device=model.device,
     )
 
-    train_epoch(
-        accelerator=accelerator,
-        model=model,
-        optimizer=optimizer,
-        target_model=target_model,
-        data_loader=data_loader,
-        data_loader_eval=data_loader_eval,
-        training_config=training_config,
-        forward_passes_since_last_activation=forward_passes_since_last_activation,
-    )
+    for epoch in range(training_config.epochs):
+        try:
+            train_epoch(
+                accelerator=accelerator,
+                model=model,
+                optimizer=optimizer,
+                target_model=target_model,
+                data_loader=data_loader,
+                data_loader_eval=data_loader_eval,
+                training_config=training_config,
+                forward_passes_since_last_activation=forward_passes_since_last_activation,
+            )
+        except KeyboardInterrupt:
+            if accelerator.is_main_process:
+                with tempfile.TemporaryDirectory() as checkpoint_dir:
+                    accelerator.save_state(checkpoint_dir)
+                    artifact = wandb.Artifact(
+                        f"model-checkpoint-{epoch}",
+                        type="model",
+                        description=f"Model checkpoint at epoch {epoch}"
+                    )
+                    artifact.add_dir(checkpoint_dir)
+                    wandb.log_artifact(artifact)
+        else:
+            if accelerator.is_main_process:
+                with tempfile.TemporaryDirectory() as checkpoint_dir:
+                    accelerator.save_state(checkpoint_dir)
+                    artifact = wandb.Artifact(
+                        f"model-checkpoint-{epoch}",
+                        type="model",
+                        description=f"Model checkpoint at epoch {epoch}"
+                    )
+                    artifact.add_dir(checkpoint_dir)
+                    wandb.log_artifact(artifact)
 
     if training_config.wandb and accelerator.is_main_process:
         accelerator.wait_for_everyone()
@@ -359,7 +371,7 @@ def train_autoencoder(file_path: str) -> None:
 
     geomatric_median_sample_loader = get_uniform_sample_loader(
         dataset.text_dataset,
-        int(len(dataset.text_dataset) * 0.1),  # TODO: Don't hardcode geometric median sample count.
+        int(len(dataset.text_dataset) * 0.008),  # TODO: Don't hardcode geometric median sample count.
         batch_size=1,
     )
     samples = [
