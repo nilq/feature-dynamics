@@ -124,7 +124,10 @@ def train_epoch(
                 ).bool()
 
                 print("Max dead length:", forward_passes_since_last_activation[i].max())
-                print("Ghost gradient mask, any non-0 mask:", ghost_gradient_neuron_mask.any())
+                print(
+                    "Ghost gradient mask, any non-0 mask:",
+                    ghost_gradient_neuron_mask.any(),
+                )
 
             model.train()
             loss, _, latents_pre_act, l2_loss, l1_loss = model(
@@ -200,7 +203,14 @@ def train_epoch(
                     )
 
                     # Explainability.
-                    l0_mean = (activation_frequencies > 0).float().sum(-1).detach().mean().item()
+                    l0_mean = (
+                        (activation_frequencies > 0)
+                        .float()
+                        .sum(-1)
+                        .detach()
+                        .mean()
+                        .item()
+                    )
 
                     # Feature sparsity histogram.
                     plt.figure(figsize=(10, 6))  # You can set the size of the figure
@@ -292,7 +302,7 @@ def train(
                     artifact = wandb.Artifact(
                         f"model-checkpoint-{epoch}",
                         type="model",
-                        description=f"Model checkpoint at epoch {epoch}"
+                        description=f"Model checkpoint at epoch {epoch}",
                     )
                     artifact.add_dir(checkpoint_dir)
                     wandb.log_artifact(artifact)
@@ -303,7 +313,7 @@ def train(
                     artifact = wandb.Artifact(
                         f"model-checkpoint-{epoch}",
                         type="model",
-                        description=f"Model checkpoint at epoch {epoch}"
+                        description=f"Model checkpoint at epoch {epoch}",
                     )
                     artifact.add_dir(checkpoint_dir)
                     wandb.log_artifact(artifact)
@@ -371,7 +381,9 @@ def train_autoencoder(file_path: str) -> None:
 
     geomatric_median_sample_loader = get_uniform_sample_loader(
         dataset.text_dataset,
-        int(len(dataset.text_dataset) * 0.008),  # TODO: Don't hardcode geometric median sample count.
+        int(
+            len(dataset.text_dataset) * 0.008
+        ),  # TODO: Don't hardcode geometric median sample count.
         batch_size=1,
     )
     samples = [
@@ -383,7 +395,7 @@ def train_autoencoder(file_path: str) -> None:
             model=target_model,
             model_input=text,
             layer=training_config.data.target_layer,
-            activation_name=training_config.data.target_activation_name
+            activation_name=training_config.data.target_activation_name,
         )
         for text in tqdm(samples, desc="Gathering model activations")
     ]
@@ -392,7 +404,10 @@ def train_autoencoder(file_path: str) -> None:
         all_activations=torch.vstack(all_activations)
     )
 
-    dataset_train, dataset_validation = split_dataset(dataset=dataset, validation_percentage=training_config.data.validation_percentage)
+    dataset_train, dataset_validation = split_dataset(
+        dataset=dataset,
+        validation_percentage=training_config.data.validation_percentage,
+    )
 
     data_loader_train = DataLoader(
         dataset=dataset_train,

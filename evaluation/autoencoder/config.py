@@ -4,10 +4,19 @@ import tomllib
 from typing import Self
 from pydantic import BaseModel, Field
 
+from training.transformer.config import DatasetConfig
+
+
 class AutoencoderEvaluationConfig(BaseModel):
     """Configuration of dataset to train dictionary model."""
+
     wandb_url: str = Field(..., description="URL of W&B experiment.")
-    wandb_model_version: str = Field(..., description="Version of model artefact to evaluate.")
+    wandb_model_version: str = Field(
+        ..., description="Version of model artefact to evaluate."
+    )
+    dataset_config: DatasetConfig = Field(
+        ..., description="Text dataset used for evaluation."
+    )
 
     @classmethod
     def from_toml_path(cls, file_path: str) -> Self:

@@ -1,6 +1,5 @@
 """Sparse autoencoder model."""
 
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -53,7 +52,7 @@ class AutoencoderConfig(PretrainedConfig):
         tied=False,
         l1_coefficient: int = 0.1,
         torch_dtype: str = "bfloat16",
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.hidden_size = hidden_size
@@ -94,7 +93,7 @@ class Autoencoder(PreTrainedModel):
 
         self.l1_coefficient = config.l1_coefficient
 
-        kaiming_uniform_(self.encoder.weight, nonlinearity='relu')
+        kaiming_uniform_(self.encoder.weight, nonlinearity="relu")
 
         # TODO: Add more maybe.
         if config.activation_type == "relu":
@@ -109,21 +108,27 @@ class Autoencoder(PreTrainedModel):
                 bias=False,
                 dtype=config.torch_dtype,
             )
-            kaiming_uniform_(self.decoder.weight, nonlinearity='relu')
+            kaiming_uniform_(self.decoder.weight, nonlinearity="relu")
 
     @torch.no_grad()
-    def initialise_decoder_bias_with_geometric_median(self, all_activations: torch.Tensor):
+    def initialise_decoder_bias_with_geometric_median(
+        self, all_activations: torch.Tensor
+    ):
         previous_decoder_bias = self.decoder_bias.clone().to(all_activations.device)
         median: torch.Tensor = geometric_median(all_activations)
 
-        previous_distances = torch.norm(all_activations - previous_decoder_bias.unsqueeze(0), dim=1)
+        previous_distances = torch.norm(
+            all_activations - previous_decoder_bias.unsqueeze(0), dim=1
+        )
         distances = torch.norm(all_activations - median.unsqueeze(0), dim=1)
 
         print("Reinitializing decoder bias with geometric median of activations")
         print(f"Previous distances: {previous_distances.median().item()}")
         print(f"New distances: {distances.median().item()}")
 
-        self.decoder_bias.data = median.to(self.decoder_bias.device, dtype=self.decoder_bias.dtype)
+        self.decoder_bias.data = median.to(
+            self.decoder_bias.device, dtype=self.decoder_bias.dtype
+        )
 
     @torch.no_grad()
     def remove_gradients_parallel_to_decoder_directions(self):
@@ -252,12 +257,14 @@ class Autoencoder(PreTrainedModel):
         # l2_loss = (reconstructed.float() - x.float()).pow(2).sum(-1).mean()
 
         x_centered = x - x.mean(dim=0, keepdim=True)
-        l2_loss = (torch.pow((reconstructed - x.float()), 2) / 
-            x_centered.norm(dim=-1, keepdim=True)).mean()
-            # (x_centered ** 2).sum(dim=-1, keepdim=True).sqrt()).mean()
+        l2_loss = (
+            torch.pow((reconstructed - x.float()), 2)
+            / x_centered.norm(dim=-1, keepdim=True)
+        ).mean()
+        # (x_centered ** 2).sum(dim=-1, keepdim=True).sqrt()).mean()
 
         sparsity = latents.norm(p=1.0, dim=1).mean()
-        l1_loss = self.l1_coefficient * sparsity#(latents.float().abs().sum())
+        l1_loss = self.l1_coefficient * sparsity  # (latents.float().abs().sum())
         loss = l2_loss + l1_loss + l2_loss_ghost_residual
 
         return loss, reconstructed, latents, l2_loss, l1_loss

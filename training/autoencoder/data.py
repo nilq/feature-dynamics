@@ -16,7 +16,9 @@ from training.transformer.config import DatasetConfig
 from training.transformer.data import datasplit_from_dataset_config
 
 
-def split_dataset(dataset: ActivationDataset, validation_percentage: float) -> tuple[Dataset, Dataset]:
+def split_dataset(
+    dataset: ActivationDataset, validation_percentage: float
+) -> tuple[Dataset, Dataset]:
     """Split a dataset into training and validation sets.
 
     Args:

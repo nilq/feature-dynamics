@@ -13,7 +13,9 @@ class AutoencoderDatasetConfig(BaseModel):
     dataset_id: str = Field(..., description="Name of HuggingFace dataset with text.")
     dataset_text_key: str = Field(..., description="Name of text column in dataset.")
     dataset_split: str = Field(..., description="Which split to use.")
-    validation_percentage: float = Field(..., description="Percentage of data to use for validation.")
+    validation_percentage: float = Field(
+        ..., description="Percentage of data to use for validation."
+    )
     target_layer: int = Field(..., description="Target layer of activations.")
     target_activation_name: str = Field(..., description="Target activation name.")
     target_model_name: str = Field(..., description="Name of model to target.")

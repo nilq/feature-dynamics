@@ -26,7 +26,7 @@ def load_autoencoder_from_wandb(
     """
     wandb.init()
 
-    artifact = wandb.use_artifact(artifact_name, type='model')
+    artifact = wandb.use_artifact(artifact_name, type="model")
     artifact_dir = artifact.download()
 
     run = wandb.Api().run(f"{entity}/{project_name}/{run_id}")

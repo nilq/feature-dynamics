@@ -19,14 +19,14 @@ from torch.utils.data import DataLoader
 from torch.optim import Optimizer
 
 from models.transformer import Transformer
-from training.artifacts import wandb_save_transformer_states
+from training.transformer.artifacts import wandb_save_transformer_states
 
-from training.data import (
+from training.transformer.data import (
     datasplit_from_dataset_config,
     tokenizer_from_dataset_config,
     DatasetSplit,
 )
-from training.config import TrainingConfig
+from training.transformer.config import TrainingConfig
 
 from tokenizers import Tokenizer
 from transformers import get_scheduler
