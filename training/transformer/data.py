@@ -85,6 +85,7 @@ def datasplit_from_dataset_config(
         raw_datasets["train"] = load_dataset(
             path=dataset_config.dataset_id,
             name=dataset_config.dataset_config_name,
+            # TODO: Revert manual hack for giant dataset.
             split="train" if not dataset_config.test_mode else "train[:1%]",
         )
 
@@ -93,6 +94,15 @@ def datasplit_from_dataset_config(
             name=dataset_config.dataset_config_name,
             split="validation" if not dataset_config.test_mode else "validation[:1%]",
         )
+
+    def shuffle_and_subset(dataset):
+        dataset = dataset.shuffle(seed=42)
+        subset_size = int(0.15 * len(dataset))
+        return dataset.select(range(subset_size))
+
+    if not dataset_config.test_mode:
+        raw_datasets["train"] = shuffle_and_subset(raw_datasets["train"])
+        raw_datasets["validation"] = shuffle_and_subset(raw_datasets["validation"])
 
     def tokenize(examples, text_key: str = dataset_config.dataset_text_key):
         return {

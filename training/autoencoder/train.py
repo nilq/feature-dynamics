@@ -154,7 +154,7 @@ def train_epoch(
 
         data_loader.set_description(f"Training - Loss: {loss.item():.4f}")
 
-        if accelerator.sync_gradients:
+        if accelerator.sync_gradients and accelerator.is_main_process:
             if training_config.wandb:
                 if i % 2000:
                     wandb.log(

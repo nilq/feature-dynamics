@@ -76,13 +76,13 @@ def evaluate_average_logit_cross_entropy(
 
 
 # TODO: Take into account activation amount.
-def feature_token_log(
+def feature_token_activation_log(
     hooked_transformer: HookedTransformer,
     autoencoder: Autoencoder,
     validation_loader: DataLoader,
     sample_size: int,
 ) -> dict[int, list[str]]:
-    """Get log of features and tokens that make it activate.
+    """Get log of features and tokens that make them activate.
 
     Args:
         hooked_transformer (HookedTransformer): Hooked transformer to get activations.
@@ -94,7 +94,7 @@ def feature_token_log(
         dict[int, list[str]]: Mapping of feature index to list of decoded tokens.
     """
     # Mapping of feature to all token IDs.
-    feature_token_log: dict[int, list[str]] = {}
+    feature_token_activation_log: dict[int, list[str]] = {}
     tokenizer = hooked_transformer.tokenizer
 
     for i, sample in enumerate(validation_loader):
@@ -113,11 +113,62 @@ def feature_token_log(
         for i, token_id in enumerate(sample["input_ids"]):
             for feature_index in encoding[i].nonzero():
                 index: int = feature_index[0].item()
-                feature_token_log[index] = feature_token_log.get(index, []) + [
+                feature_token_activation_log[index] = feature_token_activation_log.get(index, []) + [
                     tokenizer.decode([token_id])
                 ]
 
-    return feature_token_log
+    return feature_token_activation_log
+
+
+def feature_context_activation_log(
+    hooked_transformer: HookedTransformer,
+    autoencoder: Autoencoder,
+    validation_loader: DataLoader,
+    sample_size: int,
+    context_window_size: int = 5,
+) -> dict[int, list[str]]:
+    """Get log of contexts for features that make it activate.
+
+    Args:
+        hooked_transformer (HookedTransformer): Hooked transformer to get activations.
+        autoencoder (Autoencoder): Autoencoder to extract feature.
+        validation_loader (DataLoader): Validation data loader.
+        sample_size (int): Sample size.
+        context_window_size (int, optional): Size of context window to consider. Defaults to 5.
+
+    Returns:
+        dict[int, list[str]]: Mapping of feature index to list of decoded contexts.
+    """
+    # Mapping of feature to decoded contexts.
+    feature_context_activation_log: dict[int, list[str]] = {}
+    tokenizer = hooked_transformer.tokenizer
+
+    for i, sample in enumerate(validation_loader):
+        if i >= sample_size:
+            break
+
+        activations = get_model_activations(
+            model=hooked_transformer,
+            model_input=torch.tensor(sample["input_ids"]),
+            layer=0,
+            activation_name="blocks.0.mlp.hook_post",
+        )
+
+        _, _, encoding, *_ = autoencoder(activations, use_ghost_gradients=False)
+
+        input_ids = sample["input_ids"].squeeze(0).tolist()
+        for i, feature_vector in enumerate(encoding):
+            for feature_index in feature_vector.nonzero():
+                index: int = feature_index.item()
+                # Get context around the token that activates the feature
+                start_index = max(0, i - context_window_size // 2)
+                end_index = min(len(input_ids), i + context_window_size // 2 + 1)
+                context_tokens = input_ids[start_index:end_index]
+                feature_context_activation_log[index] = feature_context_activation_log.get(index, []) + [
+                    tokenizer.decode(context_tokens)
+                ]
+
+    return feature_context_activation_log
 
 
 def load_autoencoder_from_config(
@@ -211,17 +262,16 @@ def evaluate(config_path: str) -> None:
     )
 
     print("Average logit cross-entropy:", average_logit_cross_entropy)
+ 
+    import ipdb
+    ipdb.set_trace()
 
-    feature_log: dict[int, list[str]] = feature_token_log(
+    feature_log: dict[int, list[str]] = feature_token_activation_log(
         hooked_transformer=clean_target_model,
         autoencoder=autoencoder,
         validation_loader=validation_loader,
-        sample_size=1000,
+        sample_size=100,
     )
-
-    import ipdb
-
-    ipdb.set_trace()
 
 
 if __name__ == "__main__":
