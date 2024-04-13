@@ -1,11 +1,19 @@
 """Evaluation of sparse autoencoder."""
 
+import pandas as pd
+import numpy as np
+import numpy.typing as npt
+import json
+import umap.umap_ as umap
+from pathlib import Path
 import typer
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from models.sparse_autoencoder.utils import get_model_activations
+from sklearn.cluster import HDBSCAN
+from tqdm import tqdm
 
 from training.transformer.data import datasplit_from_dataset_config
 
@@ -16,6 +24,35 @@ from transformer_lens import HookedTransformer
 
 from urllib.parse import urlparse
 from accelerate import Accelerator
+
+
+def autoencoder_feature_clustering(
+    autoencoder: Autoencoder,
+    n_neighbors: int = 25,
+    min_distance: float = 0.1,
+    metric: str = "cosine",
+) -> tuple[npt.NDArray[np.float_], npt.NDArray[np.int_]]:
+    """Extract feature UMAP and clusters from autoencoder decoding matrix.
+
+    Args:
+        autoencoder (Autoencoder): Autoencoder with feature dictionary.
+
+    Returns:
+        tuple[npt.NDArray[np.float_], npt.NDArray[np.int_]]: 2D UMAP embeddings, and HDBSCAN labels.
+    """
+    # Decoder matrix columns.
+    feature_columns: torch.Tensor = autoencoder.decoder.weight.data.T
+
+    # Clustering over 10-dimensional UMAP.
+    reducer = umap.UMAP(n_neighbors=n_neighbors, min_dist=min_distance, metric=metric, n_components=10)
+    umap_embedding_10D = reducer.fit_transform(feature_columns.float().cpu().numpy())
+    hdb = HDBSCAN(min_cluster_size=3).fit(umap_embedding_10D)
+
+    # 2-dimensional UMAP for visualisation.
+    reducer = umap.UMAP(n_neighbors=n_neighbors, min_dist=min_distance, metric=metric, n_components=10)
+    umap_embedding_2D = reducer.fit_transform(feature_columns.float().cpu().numpy())
+
+    return umap_embedding_2D, hdb.labels_
 
 
 def softmax_cross_entropy_with_logits(
@@ -74,15 +111,18 @@ def evaluate_average_logit_cross_entropy(
 
     return total_cross_entropy / sample_size
 
-
-# TODO: Take into account activation amount.
-def feature_token_activation_log(
+def feature_activation_log(
     hooked_transformer: HookedTransformer,
     autoencoder: Autoencoder,
     validation_loader: DataLoader,
     sample_size: int,
-) -> dict[int, list[str]]:
+    context_window_size: int,
+) -> tuple[pd.DataFrame, dict[int, list[str]], dict[int, list[str]]]:
     """Get log of features and tokens that make them activate.
+
+    Notes:
+        Context activations contain the surrounding context (context_window_size - 1) backwards,
+        and 1 fowards, i.e. the activating token is at index -2.
 
     Args:
         hooked_transformer (HookedTransformer): Hooked transformer to get activations.
@@ -91,33 +131,74 @@ def feature_token_activation_log(
         sample_size (int): Sample size.
 
     Returns:
-        dict[int, list[str]]: Mapping of feature index to list of decoded tokens.
+        tuple[pd.DataFrame, dict[int, list[str]], dict[int, list[str]]]:
+            DataFrame of feature statistics, feature token activation log, feature context activation log.
     """
     # Mapping of feature to all token IDs.
     feature_token_activation_log: dict[int, list[str]] = {}
+    feature_context_activation_log: dict[int, list[str]] = {}
     tokenizer = hooked_transformer.tokenizer
+
+    # DataFrame contents.
+    tokens: list[str] = []
+    contexts: list[str] = []  # Activating token at index -2.
+    positions: list[int] = []
+    feature_activations: list[float] = []
+    features: list[int] = []
 
     for i, sample in enumerate(validation_loader):
         if i >= sample_size:
             break
 
+        input_ids: list[int] = sample["input_ids"]
+
         activations = get_model_activations(
             model=hooked_transformer,
-            model_input=torch.tensor(sample["input_ids"]),
+            model_input=torch.tensor(input_ids),
             layer=0,
             activation_name="blocks.0.mlp.hook_post",
         )
-
         _, _, encoding, *_ = autoencoder(activations, use_ghost_gradients=False)
 
-        for i, token_id in enumerate(sample["input_ids"]):
+        for i, token_id in enumerate(input_ids):
             for feature_index in encoding[i].nonzero():
+                # Index of our feature.
                 index: int = feature_index[0].item()
+
+                # Trailing context window, with activating feature at -2.
+                start_index = max(0, i - context_window_size + 1)
+                context_tokens = input_ids[start_index:i + 2]
+
+                # Decoding.
+                token: str = tokenizer.decode([token_id])
+                context: str = tokenizer.decode(context_tokens)
+
+                # Gathering all raw data.
                 feature_token_activation_log[index] = feature_token_activation_log.get(index, []) + [
-                    tokenizer.decode([token_id])
+                    token
+                ]
+                feature_context_activation_log[index] = feature_context_activation_log.get(index, []) + [
+                    context
                 ]
 
-    return feature_token_activation_log
+                # DataFrame information.
+                features.append(index)
+                tokens.append(token)
+                contexts.append(context)
+                positions.append(i)
+                feature_activations.append(encoding[i][feature_index].item())
+
+    feature_df: pd.DataFrame = pd.DataFrame(
+        {
+            "feature": features,
+            "activation": feature_activations,
+            "token": tokens,
+            "context": contexts,
+            "position": positions,
+        }
+    )
+
+    return feature_df, feature_token_activation_log, feature_context_activation_log
 
 
 def feature_context_activation_log(
@@ -143,7 +224,7 @@ def feature_context_activation_log(
     feature_context_activation_log: dict[int, list[str]] = {}
     tokenizer = hooked_transformer.tokenizer
 
-    for i, sample in enumerate(validation_loader):
+    for i, sample in tqdm(enumerate(validation_loader), total=len(validation_loader), desc="Gathering information"):
         if i >= sample_size:
             break
 
@@ -156,14 +237,12 @@ def feature_context_activation_log(
 
         _, _, encoding, *_ = autoencoder(activations, use_ghost_gradients=False)
 
-        input_ids = sample["input_ids"].squeeze(0).tolist()
-        for i, feature_vector in enumerate(encoding):
-            for feature_index in feature_vector.nonzero():
+        input_ids: list[int] = sample["input_ids"]
+        for i, sample in enumerate(input_ids):
+            for feature_index in encoding[i].nonzero():
                 index: int = feature_index.item()
-                # Get context around the token that activates the feature
-                start_index = max(0, i - context_window_size // 2)
-                end_index = min(len(input_ids), i + context_window_size // 2 + 1)
-                context_tokens = input_ids[start_index:end_index]
+                start_index = max(0, i - context_window_size - 1)
+                context_tokens = input_ids[start_index:i + 2]
                 feature_context_activation_log[index] = feature_context_activation_log.get(index, []) + [
                     tokenizer.decode(context_tokens)
                 ]
@@ -258,21 +337,34 @@ def evaluate(config_path: str) -> None:
         hooked_target_model=hooked_target_model,
         clean_target_model=clean_target_model,
         validation_loader=validation_loader,
-        sample_size=100,
+        sample_size=evaluation_config.sample_size,
     )
 
     print("Average logit cross-entropy:", average_logit_cross_entropy)
- 
-    import ipdb
-    ipdb.set_trace()
 
-    feature_log: dict[int, list[str]] = feature_token_activation_log(
+    feature_df, feature_log, context_log = feature_activation_log(
         hooked_transformer=clean_target_model,
         autoencoder=autoencoder,
         validation_loader=validation_loader,
-        sample_size=100,
+        sample_size=evaluation_config.sample_size,
+        context_window_size=8
     )
 
+    # UMAP.
+    umap_embeddings, clustering_labels = autoencoder_feature_clustering(
+        autoencoder=autoencoder,
+    )
+
+    # Write outputs.
+    output_path: Path = Path(evaluation_config.output_data_path)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    feature_df.to_csv(output_path / "feature_information.csv")
+    (output_path / "feature_token_activation_log.json").open("w+").write(json.dumps(feature_log))
+    (output_path / "feature_context_activation_log.json").open("w+").write(json.dumps(context_log))
+
+    np.save(output_path / "umap_embedding_cluster_labels.npy", clustering_labels)
+    np.save(output_path / "umap_embeddings.npy", umap_embeddings)
 
 if __name__ == "__main__":
     typer.run(evaluate)

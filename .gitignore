@@ -165,3 +165,5 @@ wimbd/*
 !wimbd/README.md
 results/
 artifacts/
+evaluation/data/*/*.json
+evaluation/data/*/*.npy

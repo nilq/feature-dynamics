@@ -17,6 +17,12 @@ class AutoencoderEvaluationConfig(BaseModel):
     dataset_config: DatasetConfig = Field(
         ..., description="Text dataset used for evaluation."
     )
+    output_data_path: str = Field(
+        ..., description="Where to output data."
+    )
+    sample_size: int = Field(
+        ..., description="Sample size of dataset to evaluate with."
+    )
 
     @classmethod
     def from_toml_path(cls, file_path: str) -> Self:
