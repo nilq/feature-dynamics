@@ -156,7 +156,7 @@ def train_epoch(
 
         if accelerator.sync_gradients and accelerator.is_main_process:
             if training_config.wandb:
-                if i % 2000:
+                if i % 10 == 0:
                     wandb.log(
                         {
                             "loss": loss.item(),
@@ -165,7 +165,7 @@ def train_epoch(
                         }
                     )
 
-                if i % 20000:
+                if i % 100 == 0:
                     # TODO: Configurable interval.
                     reconstruction_score, *_ = get_reconstruction_loss(
                         model=target_model,

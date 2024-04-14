@@ -146,7 +146,7 @@ def feature_activation_log(
     feature_activations: list[float] = []
     features: list[int] = []
 
-    for i, sample in enumerate(validation_loader):
+    for i, sample in tqdm(enumerate(validation_loader), total=len(validation_loader), desc="Gathering information"):
         if i >= sample_size:
             break
 
@@ -332,6 +332,8 @@ def evaluate(config_path: str) -> None:
     _, validation_loader = datasplit_from_dataset_config(
         dataset_config=evaluation_config.dataset_config, training_config=accelerator
     )
+
+    validation_loader = validation_loader.shuffle().select(range(evaluation_config.sample_size))
 
     average_logit_cross_entropy = evaluate_average_logit_cross_entropy(
         hooked_target_model=hooked_target_model,

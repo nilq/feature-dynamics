@@ -1,8 +1,8 @@
 [autoencoder-evaluation]
-wandb_url = "https://wandb.ai/nilq/sae-baby-python-mistral-1L-tiny-base/runs/js6wpjwa"
+wandb_url = "https://wandb.ai/nilq/sae-baby-python-mistral-1L-tiny-lua-ft/runs/o57ll4a0"
 wandb_model_version = "latest"
 sample_size = 1000
-output_data_path = "evaluation/data/baby-python-mistral-1L-tiny"
+output_data_path = "evaluation/data/baby-python-mistral-1L-tiny-lua-stories-slerp/baby-python"
 
 [autoencoder-evaluation.dataset_config]
 dataset_id = "nilq/baby-python"
