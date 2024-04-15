@@ -2,7 +2,8 @@
 wandb_url = "https://wandb.ai/nilq/sae-baby-python-mistral-1L-tiny-TinyStories-ft/runs/zphxd7a6"
 wandb_model_version = "latest"
 sample_size = 1000
-output_data_path = "evaluation/data/baby-python-mistral-1L-tiny-TinyStories-ft/baby-python"
+# output_data_path = "evaluation/data/baby-python-mistral-1L-tiny-TinyStories-ft/baby-python"
+output_data_path = "/mnt/batch/tasks/shared/LS_root/mounts/clusters/niels-a100-vm/code/Users/niels.horn/data/baby-python-mistral-1L-tiny-TinyStories-ft/baby-python"
 
 [autoencoder-evaluation.dataset_config]
 dataset_id = "nilq/baby-python"
