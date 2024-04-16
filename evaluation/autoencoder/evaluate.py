@@ -44,12 +44,16 @@ def autoencoder_feature_clustering(
     feature_columns: torch.Tensor = autoencoder.decoder.weight.data.T
 
     # Clustering over 10-dimensional UMAP.
-    reducer = umap.UMAP(n_neighbors=n_neighbors, min_dist=min_distance, metric=metric, n_components=10)
+    reducer = umap.UMAP(
+        n_neighbors=n_neighbors, min_dist=min_distance, metric=metric, n_components=10
+    )
     umap_embedding_10D = reducer.fit_transform(feature_columns.float().cpu().numpy())
     hdb = HDBSCAN(min_cluster_size=3).fit(umap_embedding_10D)
 
     # 2-dimensional UMAP for visualisation.
-    reducer = umap.UMAP(n_neighbors=n_neighbors, min_dist=min_distance, metric=metric, n_components=10)
+    reducer = umap.UMAP(
+        n_neighbors=n_neighbors, min_dist=min_distance, metric=metric, n_components=10
+    )
     umap_embedding_2D = reducer.fit_transform(feature_columns.float().cpu().numpy())
 
     return umap_embedding_2D, hdb.labels_
@@ -111,6 +115,7 @@ def evaluate_average_logit_cross_entropy(
 
     return total_cross_entropy / sample_size
 
+
 def feature_activation_log(
     hooked_transformer: HookedTransformer,
     autoencoder: Autoencoder,
@@ -146,7 +151,11 @@ def feature_activation_log(
     feature_activations: list[float] = []
     features: list[int] = []
 
-    for i, sample in tqdm(enumerate(validation_loader), total=len(validation_loader), desc="Gathering information"):
+    for i, sample in tqdm(
+        enumerate(validation_loader),
+        total=len(validation_loader),
+        desc="Gathering information",
+    ):
         if i >= sample_size:
             break
 
@@ -167,19 +176,19 @@ def feature_activation_log(
 
                 # Trailing context window, with activating feature at -2.
                 start_index = max(0, i - context_window_size + 1)
-                context_tokens = input_ids[start_index:i + 2]
+                context_tokens = input_ids[start_index : i + 2]
 
                 # Decoding.
                 token: str = tokenizer.decode([token_id])
                 context: str = tokenizer.decode(context_tokens)
 
                 # Gathering all raw data.
-                feature_token_activation_log[index] = feature_token_activation_log.get(index, []) + [
-                    token
-                ]
-                feature_context_activation_log[index] = feature_context_activation_log.get(index, []) + [
-                    context
-                ]
+                feature_token_activation_log[index] = feature_token_activation_log.get(
+                    index, []
+                ) + [token]
+                feature_context_activation_log[index] = (
+                    feature_context_activation_log.get(index, []) + [context]
+                )
 
                 # DataFrame information.
                 features.append(index)
@@ -224,7 +233,11 @@ def feature_context_activation_log(
     feature_context_activation_log: dict[int, list[str]] = {}
     tokenizer = hooked_transformer.tokenizer
 
-    for i, sample in tqdm(enumerate(validation_loader), total=len(validation_loader), desc="Gathering information"):
+    for i, sample in tqdm(
+        enumerate(validation_loader),
+        total=len(validation_loader),
+        desc="Gathering information",
+    ):
         if i >= sample_size:
             break
 
@@ -242,10 +255,11 @@ def feature_context_activation_log(
             for feature_index in encoding[i].nonzero():
                 index: int = feature_index.item()
                 start_index = max(0, i - context_window_size - 1)
-                context_tokens = input_ids[start_index:i + 2]
-                feature_context_activation_log[index] = feature_context_activation_log.get(index, []) + [
-                    tokenizer.decode(context_tokens)
-                ]
+                context_tokens = input_ids[start_index : i + 2]
+                feature_context_activation_log[index] = (
+                    feature_context_activation_log.get(index, [])
+                    + [tokenizer.decode(context_tokens)]
+                )
 
     return feature_context_activation_log
 
@@ -333,7 +347,9 @@ def evaluate(config_path: str) -> None:
         dataset_config=evaluation_config.dataset_config, training_config=accelerator
     )
 
-    validation_loader = validation_loader.shuffle().select(range(evaluation_config.sample_size))
+    validation_loader = validation_loader.shuffle().select(
+        range(evaluation_config.sample_size)
+    )
 
     average_logit_cross_entropy = evaluate_average_logit_cross_entropy(
         hooked_target_model=hooked_target_model,
@@ -349,7 +365,7 @@ def evaluate(config_path: str) -> None:
         autoencoder=autoencoder,
         validation_loader=validation_loader,
         sample_size=evaluation_config.sample_size,
-        context_window_size=8
+        context_window_size=8,
     )
 
     # UMAP.
@@ -360,13 +376,18 @@ def evaluate(config_path: str) -> None:
     # Write outputs.
     output_path: Path = Path(evaluation_config.output_data_path)
     output_path.mkdir(parents=True, exist_ok=True)
-    
+
     feature_df.to_csv(output_path / "feature_information.csv")
-    (output_path / "feature_token_activation_log.json").open("w+").write(json.dumps(feature_log))
-    (output_path / "feature_context_activation_log.json").open("w+").write(json.dumps(context_log))
+    (output_path / "feature_token_activation_log.json").open("w+").write(
+        json.dumps(feature_log)
+    )
+    (output_path / "feature_context_activation_log.json").open("w+").write(
+        json.dumps(context_log)
+    )
 
     np.save(output_path / "umap_embedding_cluster_labels.npy", clustering_labels)
     np.save(output_path / "umap_embeddings.npy", umap_embeddings)
+
 
 if __name__ == "__main__":
     typer.run(evaluate)

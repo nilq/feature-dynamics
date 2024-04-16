@@ -3,6 +3,7 @@ import gzip
 import json
 import typer
 
+from tqdm import tqdm
 from pathlib import Path
 from datasets import load_dataset
 from typing import Optional
@@ -18,9 +19,10 @@ def save_jsonl_gz(data, output_path: Path) -> None:
         data: List of dictionaries to save.
         output_path (Path): The path to save the compressed JSONL file.
     """
-    with gzip.open(output_path, "wt", encoding="UTF-8") as f:
-        for record in data:
-            f.write(json.dumps(record) + "\n")
+    with gzip.open(output_path, "wt") as f:
+        for item in data:
+            item = {"text": item}
+            f.write(json.dumps(item) + "\n")
 
 
 @app.command()
@@ -46,13 +48,16 @@ def download_and_convert(
         split_dir = output_dir / split
         split_dir.mkdir(exist_ok=True)
 
-        # Convert to DataFrame and then to JSONL for each file in the split
-        for i, data in enumerate(dataset[split]):
-            output_file = (
-                split_dir / f"{split}.{i:05d}-of-{len(dataset[split]):05d}.json.gz"
-            )
-            save_jsonl_gz(data, output_file)
-            print(f"Saved {output_file}")
+        total_samples = len(dataset[split])
+
+        for start_idx in tqdm(
+            range(0, total_samples, 1000), desc=f"Processing {split}"
+        ):
+            end_idx = min(start_idx + 1000, total_samples)
+            data_chunk = dataset[split].select(range(start_idx, end_idx))["content"]
+
+            output_file = split_dir / f"{split}_{start_idx//1000}.json.gz"
+            save_jsonl_gz(data_chunk, output_file)
 
 
 if __name__ == "__main__":
