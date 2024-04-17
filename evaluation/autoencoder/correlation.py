@@ -23,6 +23,13 @@ def correlated_features(
     Returns:
         pd.DataFrame: A DataFrame containing pairs of IDs with their correlation coefficient.
     """
+
+    # Paranoia, make 200% sure we're computing on clean data.
+    df_a = df_a[df_a["feature"].isin(range(16_384))]
+    df_b = df_b[df_b["feature"].isin(range(16_384))]
+    df_a = df_a[df_a["token"] == df_a["token"]]
+    df_b = df_b[df_b["token"] == df_b["token"]]
+
     # Pivot the data frames
     pivot_a = df_a.pivot_table(index="feature", columns="token", values="activation")
     pivot_b = df_b.pivot_table(index="feature", columns="token", values="activation")
@@ -53,10 +60,18 @@ def correlated_features(
 
 def correlate(file_path: str) -> None:
     correlation_config = CorrelationConfig.from_toml_path(file_path=file_path)
-    df_model_a: pd.DataFrame = pd.read_csv(correlation_config.model_a_path).sample(n=correlation_config.sample_size)
-    df_model_b: pd.DataFrame = pd.read_csv(correlation_config.model_b_path).sample(n=correlation_config.sample_size)
+    df_model_a: pd.DataFrame = pd.read_csv(correlation_config.model_a_path).sample(
+        n=correlation_config.sample_size
+    )
+    df_model_b: pd.DataFrame = pd.read_csv(correlation_config.model_b_path).sample(
+        n=correlation_config.sample_size
+    )
 
-    df_output = correlated_features(df_a=df_model_a, df_b=df_model_b, correlation_threshold=correlation_config.correlation_threshold)
+    df_output = correlated_features(
+        df_a=df_model_a,
+        df_b=df_model_b,
+        correlation_threshold=correlation_config.correlation_threshold,
+    )
 
     Path(correlation_config.output_path).parent.mkdir(parents=True, exist_ok=True)
     df_output.to_csv(correlation_config.output_path)

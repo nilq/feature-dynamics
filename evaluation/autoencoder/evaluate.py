@@ -186,9 +186,9 @@ def feature_activation_log(
                 feature_token_activation_log[index] = feature_token_activation_log.get(
                     index, []
                 ) + [token]
-                feature_context_activation_log[index] = (
-                    feature_context_activation_log.get(index, []) + [context]
-                )
+                feature_context_activation_log[
+                    index
+                ] = feature_context_activation_log.get(index, []) + [context]
 
                 # DataFrame information.
                 features.append(index)
@@ -256,10 +256,11 @@ def feature_context_activation_log(
                 index: int = feature_index.item()
                 start_index = max(0, i - context_window_size - 1)
                 context_tokens = input_ids[start_index : i + 2]
-                feature_context_activation_log[index] = (
-                    feature_context_activation_log.get(index, [])
-                    + [tokenizer.decode(context_tokens)]
-                )
+                feature_context_activation_log[
+                    index
+                ] = feature_context_activation_log.get(index, []) + [
+                    tokenizer.decode(context_tokens)
+                ]
 
     return feature_context_activation_log
 

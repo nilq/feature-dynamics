@@ -9,10 +9,17 @@ from training.transformer.config import DatasetConfig
 
 class CorrelationConfig(BaseModel):
     """Configuration of correlation experiment."""
+
     sample_size: int = Field(..., description="Sample size for cross-correlation.")
-    model_a_path: str = Field(..., description="Path to CSV containing feature data for model A.")
-    model_b_path: str = Field(..., description="Path to CSV containing feature data for model B.")
-    correlation_threshold: float = Field(..., description="Pearson-correlation threshold.")
+    model_a_path: str = Field(
+        ..., description="Path to CSV containing feature data for model A."
+    )
+    model_b_path: str = Field(
+        ..., description="Path to CSV containing feature data for model B."
+    )
+    correlation_threshold: float = Field(
+        ..., description="Pearson-correlation threshold."
+    )
 
     output_path: str = Field(..., description="Path to output correlation CSV file.")
 

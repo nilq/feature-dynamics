@@ -174,15 +174,16 @@ def train_epoch(
                         target_activation_name=training_config.data.target_activation_name,
                     )
 
-                    activation_frequencies, dead_percentage = (
-                        get_activation_frequencies(
-                            model=target_model,
-                            encoder=model,
-                            samples=texts,
-                            target_activation_name=training_config.data.target_activation_name,
-                            target_layer=training_config.data.target_layer,
-                            device=model.device,
-                        )
+                    (
+                        activation_frequencies,
+                        dead_percentage,
+                    ) = get_activation_frequencies(
+                        model=target_model,
+                        encoder=model,
+                        samples=texts,
+                        target_activation_name=training_config.data.target_activation_name,
+                        target_layer=training_config.data.target_layer,
+                        device=model.device,
                     )
 
                     feature_sparsity = activation_frequencies / active_tokens

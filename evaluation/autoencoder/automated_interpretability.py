@@ -3,7 +3,6 @@
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-import typer
 
 
 def select_activation_examples(df: pd.DataFrame, feature_number: int) -> pd.DataFrame:
