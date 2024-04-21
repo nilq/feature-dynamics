@@ -3,4 +3,4 @@ model_a_path = "data/features/baby-python-mistral-1L-tiny-TinyStories-ft/baby-py
 model_b_path = "data/features/baby-python-mistral-1L-tiny-lua-stories-slerp/lua/feature_information.csv"
 sample_size = 12_000_000
 correlation_threshold = 0.8
-output_path = "data/correlations/tiny-stories/TinyStories_vs_slerp.csv"
+output_path = "data/correlations/baby-python/TinyStories_vs_slerp.csv"

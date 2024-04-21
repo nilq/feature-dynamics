@@ -1,6 +1,6 @@
 [correlation]
 model_a_path = "data/features/baby-python-mistral-1L-tiny-lua-ft/lua/feature_information.csv"
 model_b_path = "data/features/baby-python-mistral-1L-tiny-lua-stories-slerp/lua/feature_information.csv"
-sample_size = 2500
+sample_size = 12_000
 correlation_threshold = 0.8
 output_path = "data/correlations/lua/lua_vs_slerp.csv"
