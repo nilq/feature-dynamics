@@ -23,20 +23,19 @@ def correlated_features(
     Returns:
         pd.DataFrame: A DataFrame containing pairs of IDs with their correlation coefficient.
     """
+    df_a = df_a[df_a["feature"].isin(range(16_384))].dropna(
+        subset=["feature", "token", "activation"]
+    )
+    df_b = df_b[df_b["feature"].isin(range(16_384))].dropna(
+        subset=["feature", "token", "activation"]
+    )
 
-    # Paranoia, make 200% sure we're computing on clean data.
-    df_a = df_a[df_a["feature"].isin(range(16_384))]
-    df_b = df_b[df_b["feature"].isin(range(16_384))]
-    df_a = df_a[df_a["token"] == df_a["token"]]
-    df_b = df_b[df_b["token"] == df_b["token"]]
-
-    # Pivot the data frames
     pivot_a = df_a.pivot_table(index="feature", columns="token", values="activation")
     pivot_b = df_b.pivot_table(index="feature", columns="token", values="activation")
 
     token_intersection = list(set(pivot_a.columns).intersection(pivot_b.columns))
-    pivot_a = pivot_a[token_intersection].fillna(0)
-    pivot_b = pivot_b[token_intersection].fillna(0)
+    pivot_a = pivot_a[token_intersection]
+    pivot_b = pivot_b[token_intersection]
 
     results = []
 
@@ -45,8 +44,12 @@ def correlated_features(
         total=len(pivot_a.index) * len(pivot_b.index),
     )
     for feature_a, feature_b in progress_wrapped_features:
-        aligned_a = pivot_a.loc[feature_a]
-        aligned_b = pivot_b.loc[feature_b]
+        aligned_a = pivot_a.loc[feature_a].dropna()
+        aligned_b = pivot_b.loc[feature_b].dropna()
+
+        common_tokens = aligned_a.index.intersection(aligned_b.index)
+        aligned_a = aligned_a[common_tokens]
+        aligned_b = aligned_b[common_tokens]
 
         if len(aligned_a) > 1 and len(aligned_b) > 1:
             correlation, _ = pearsonr(aligned_a, aligned_b)

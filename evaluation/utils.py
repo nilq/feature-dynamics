@@ -216,3 +216,19 @@ def show_plot_of_umap_clusters(
         )
     )
     show(plot)
+
+
+def clean_feature_information_from_csv(csv_path: str) -> pd.DataFrame:
+    """Load DataFrame of feature information, removing dirty data.
+
+    Args:
+        path (str): Path to CSV.
+
+    Returns:
+        pd.DataFrame: DataFrame with feature information.
+    """
+    df = pd.read_csv(csv_path)
+    df = df[df["token"] == df["token"]]
+    df = df[df["feature"].isin(range(16382))]
+
+    return df
