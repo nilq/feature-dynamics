@@ -6,6 +6,7 @@ Inspired by:
 """
 
 import os
+from typing import Any
 import pandas as pd
 
 from evaluation.autoencoder.automated_interpretability.activations import (
@@ -80,7 +81,7 @@ Activations:
 <sample end>
 
 Explain the behaviour of Feature #1002, without mentioning specific examples of tokens, by completing the sentence "This feature looks mainly for"
-        """,
+        """.strip(),
     },
     {"role": "assistant", "content": "single-digit numbers and quotation marks."},
 ]
@@ -99,7 +100,7 @@ async def explain_feature_token_activation(
         str: Explanation of feature.
     """
     # It is not polite to hardcode values ...
-    return await openai_explanation(
+    explanation, _ = await openai_response(
         model_name="gpt-4-turbo",
         system_prompt=TOKEN_ACTIVATION_SYSTEM_PROMPT,
         messages=[
@@ -117,15 +118,18 @@ async def explain_feature_token_activation(
         top_p=1.0,
     )
 
+    return explanation
 
-async def openai_explanation(
+
+async def openai_response(
     model_name: str,
     system_prompt: str,
     messages: list[dict[str, str]],
     temperature: float,
     top_p: float,
-) -> str:
-    """Get OpenAI model explanations from prompt.
+    **kwargs,
+) -> tuple[str, Any]:
+    """Get OpenAI model response from prompt etc.
 
     Args:
         model_name (str): Name of model to use.
@@ -133,19 +137,24 @@ async def openai_explanation(
         messages (list[dict[str, str]]): Messages in conversation.
         temperature (float): Temperature of nucleus sampling generation.
         top_p (float): Top-P value of sampling.
+        **kwargs: Key-word arguments for model.
 
     Returns:
-        str: Explanation extracted from model response.
+        tuple[str, Any]: Explanation extracted from model response, and raw API response.
     """
     final_messages: list[dict[str, str]] = [
         {"role": "system", "content": system_prompt},
         *messages,
     ]
     response = await openai_client.chat.completions.create(
-        model=model_name, messages=final_messages, temperature=temperature, top_p=top_p
+        model=model_name,
+        messages=final_messages,
+        temperature=temperature,
+        top_p=top_p,
+        **kwargs,
     )
     response_message: str = response.choices[0].message.content
-    return response_message
+    return response_message, response
 
 
 def activation_samples_overview(activations: list[Activation]) -> str:
