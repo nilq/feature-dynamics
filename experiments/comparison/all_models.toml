@@ -2,11 +2,11 @@
 model_names = ["baby-python", "lua", "tiny-stories", "slerp"]
 sample_size = 1000
 similarity_threshold = 0.05
-consistency_threshold = 0.95
+consistency_threshold = 0.9
 output_path = "data/flow/all_models_flow.json"
 
 [comparison.dataset_config]
-dataset_id = "nilq/baby-python-and-tiny-stories-and-lua"
+dataset_id = "nilq/baby-python"
 dataset_text_key = "content"
 tokenizer_id = "mistralai/Mistral-7B-v0.1"
 block_size = 24
