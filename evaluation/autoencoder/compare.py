@@ -5,6 +5,7 @@ import typer
 import torch
 import datasets
 import pandas as pd
+import matplotlib.pyplot as plt
 
 from torch.nn.functional import normalize
 from evaluation.autoencoder.evaluate import *
@@ -127,7 +128,7 @@ def correlated_features(model_feature_activations: dict[str, list[int, list[floa
     
     df = pd.DataFrame(data)
 
-    data_tensor = torch.tensor(data.values).float()
+    data_tensor = torch.tensor(df.values).float()
     data_tensor = data_tensor.to('cuda')
 
     mean = data_tensor.mean(0, keepdim=True)
@@ -162,6 +163,16 @@ def correlated_features(model_feature_activations: dict[str, list[int, list[floa
         corr_value = sub_correlation_matrix[row, col].item()
 
         pairs_with_correlation[(first_col_name, second_col_name)] = corr_value
+
+    # Plot a wee sample.
+    test_a, test_b = list(pairs_and_how_correlated_they_are.keys())[0]
+    plt.figure(figsize=(10, 6))
+    plt.scatter(df[test_a], df[test_b], alpha=0.5)
+    plt.title(f"{test_a} vs {test_b} - correlation {pairs_and_how_correlated_they_are[(test_a, test_b)]}")
+    plt.xlabel(test_a)
+    plt.ylabel(test_b)
+    plt.grid(True)
+    plt.savefig("test.png")
 
     return pairs_with_correlation
 
@@ -271,12 +282,13 @@ def correlate(file_path: str) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     model_activations: dict[str, dict[int, list[float]]] = feature_activations(
-        models=["baby-python", "lua"],
+        model_names=["baby-python", "lua"],
         sample_loader=sample_loader
     )
 
     pairs_and_how_correlated_they_are: dict[tuple[str, str], float] = correlated_features(
-        model_feature_activations=model_activations
+        model_feature_activations=model_activations,
+        correlation_threshold=0.7
     )
 
     pairs_data: dict[str, float] = { f"{a}->{b}": correlation for (a, b), correlation in pairs_and_how_correlated_they_are}

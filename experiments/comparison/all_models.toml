@@ -1,8 +1,8 @@
 [comparison]
 model_names = ["baby-python", "lua", "tiny-stories", "slerp"]
-sample_size = 1000
+sample_size = 100
 similarity_threshold = 0.05
-consistency_threshold = 0.9
+consistency_threshold = 0.8
 output_path = "data/flow/all_models_flow.json"
 
 [comparison.dataset_config]
