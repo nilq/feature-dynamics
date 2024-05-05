@@ -6,6 +6,31 @@ from pydantic import BaseModel, Field
 
 from training.transformer.config import DatasetConfig
 
+class ComparisonConfig(BaseModel):
+    """Configuration of comparison experiments."""
+    model_names: list[str] = Field(..., description="Names of models to compare.")
+    dataset_config: DatasetConfig = Field(
+        ..., description="Text dataset used for evaluation."
+    )
+    sample_size: int = Field(..., description="Sample size to evaluate on.")
+    similarity_threshold: float = Field(..., description="Similarity threshold for feature activation pattern.")
+    consistency_threshold: float = Field(..., description="Consistency threshold for feature flow.")
+    output_path: str = Field(..., description="Output path for JSON list of similar features.")
+
+    @classmethod
+    def from_toml_path(cls, file_path: str) -> Self:
+        """Loads the comparison configuration from a TOML file.
+
+        Args:
+            file_path (str): Path to the TOML file.
+
+        Returns:
+            TrainingConfig: An instance of the TrainingConfig class with data loaded from the TOML file.
+        """
+        with open(file_path, "rb") as file:
+            toml_data = tomllib.load(file)["comparison"]
+        return cls(**toml_data)
+
 
 class CorrelationConfig(BaseModel):
     """Configuration of correlation experiment."""
@@ -25,7 +50,7 @@ class CorrelationConfig(BaseModel):
 
     @classmethod
     def from_toml_path(cls, file_path: str) -> Self:
-        """Loads the training configuration from a TOML file.
+        """Loads the correlation configuration from a TOML file.
 
         Args:
             file_path (str): Path to the TOML file.
@@ -55,7 +80,7 @@ class AutoencoderEvaluationConfig(BaseModel):
 
     @classmethod
     def from_toml_path(cls, file_path: str) -> Self:
-        """Loads the training configuration from a TOML file.
+        """Loads the autoencoder evaluation configuration from a TOML file.
 
         Args:
             file_path (str): Path to the TOML file.

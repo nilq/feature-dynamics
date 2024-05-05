@@ -1,0 +1,13 @@
+[comparison]
+model_names = ["lua", "slerp"]
+sample_size = 1000
+similarity_threshold = 0.05
+consistency_threshold = 0.95
+output_path = "data/flow/lua_slerp_flow.json"
+
+[comparison.dataset_config]
+dataset_id = "nilq/small-lua-stack"
+dataset_text_key = "content"
+tokenizer_id = "mistralai/Mistral-7B-v0.1"
+block_size = 24
+use_syntaxi = false
