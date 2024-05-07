@@ -168,3 +168,4 @@ artifacts/
 data/**/*.json
 data/**/*.npy
 data/**/*.csv
+*.h5

@@ -6,6 +6,7 @@ import torch
 import datasets
 import pandas as pd
 import matplotlib.pyplot as plt
+import h5py
 
 from torch.nn.functional import normalize
 from evaluation.autoencoder.evaluate import *
@@ -18,6 +19,12 @@ from training.transformer.data import (
 from sklearn.preprocessing import KBinsDiscretizer
 from training.autoencoder.train import get_uniform_sample_loader
 from evaluation.autoencoder.config import ComparisonConfig
+
+import os
+
+
+PATH_WITH_ENOUGH_SPACE: str = os.getenv("ACTIVATION_CACHE", "")
+
 
 # To load corresponding autoencoder.
 grandparent_dir: Path = Path(__file__).parent / ".." / ".."
@@ -74,58 +81,185 @@ def get_encodings(input_ids: list[int], autoencoder: Autoencoder, hooked_target_
     return encoding
 
 
-def feature_activations(model_names: list[str], sample_loader: DataLoader) -> dict[str, dict[int, list[float]]]:
+def plot_feature_correlations(features_by_model: dict[str, list[int]], save_path: str):
+    """
+    Load features for specific models and plot their correlations for features at the same index.
+
+    Args:
+        features_by_model (dict[str, list[int]]): Dictionary where keys are model names and values are lists of feature indices.
+        save_path (str): Directory path where HDF5 files are saved.
+
+    Returns:
+        None: The function saves plots as files and does not return any value.
+    """
+    feature_activations = load_specific_features(features_by_model, save_path)
+    
+    # Assuming all models have the same number of specified features, compare corresponding features
+    models = list(features_by_model.keys())
+    if len(models) < 2:
+        raise ValueError("Need at least two models to compare features.")
+
+    num_features = min(len(features) for features in features_by_model.values())
+    for feature_idx in range(num_features):
+        model_feature_data = {}
+        
+        # Collect data for the current feature index from all models
+        for model in models:
+            feature_number = features_by_model[model][feature_idx]
+            model_feature_data[model] = feature_activations[model][feature_number]
+        
+        # Prepare data sets for plotting
+        plotted_models = list(model_feature_data.keys())
+        for i in range(len(plotted_models) - 1):
+            for j in range(i + 1, len(plotted_models)):
+                model_i, model_j = plotted_models[i], plotted_models[j]
+                data_i, data_j = model_feature_data[model_i], model_feature_data[model_j]
+
+                # Compute correlation
+                correlation = np.corrcoef(data_i, data_j)[0, 1] * 100
+
+                # Plotting
+                plt.figure(figsize=(10, 6))
+                plt.scatter(data_i, data_j, alpha=0.5)
+                title = f"{model_i}/{features_by_model[model_i][feature_idx]} vs {model_j}/{features_by_model[model_j][feature_idx]} - correlation {correlation:.1f}%"
+                plt.title(title)
+                plt.xlabel(f"{model_i}/{features_by_model[model_i][feature_idx]}")
+                plt.ylabel(f"{model_j}/{features_by_model[model_j][feature_idx]}")
+                plt.grid(True)
+                
+                # Save the plot
+                filename = f"{model_i}_{features_by_model[model_i][feature_idx]}__{model_j}_{features_by_model[model_j][feature_idx]}.png"
+                plt.savefig(Path(save_path) / filename)
+                plt.close()
+
+    print("All plots generated and saved.")
+
+
+def load_specific_features(features_by_model: dict[str, list[int]], save_path: str) -> dict[str, dict[int, list[float]]]:
+    """Load specific features for specific models.
+
+    Args:
+        features_by_model (dict[str, list[int]]): Dictionary where keys are model names and values are lists of feature indices.
+        save_path (str): Directory path with activation data.
+
+    Returns:
+        dict[str, dict[int, list[float]]]: Dictionary of models and specific feature activation data.
+    """
+    results = {}
+    path = Path(save_path)
+
+    for model_name, features in features_by_model.items():
+        model_file_path = path / f"activations_{model_name}.h5"
+        feature_data = {}
+
+        with h5py.File(model_file_path, 'r') as file:
+            activations_group = file['activations']
+            for feature_index in features:
+                dataset_name = f"feature_{feature_index}"
+                if dataset_name in activations_group:
+                    feature_data[feature_index] = activations_group[dataset_name][:]
+        
+        results[model_name] = feature_data
+
+    return results
+
+def load_feature_activations(file_path: str, sample_size: int | None = None, seed: int = 42) -> dict[str, dict[int, list[float]]]:
+    """Load feature activations from an HDF5 file into the desired dictionary format.
+
+    Args:
+        file_path (str): Path to the HDF5 file containing activations.
+
+    Returns:
+        dict[str, dict[int, list[float]]]: Nested dictionary of models to features to activations.
+    """
+    model_feature_activations: dict[str, dict[int, list[float]]] = {}
+
+    with h5py.File(file_path, 'r') as h5f:
+        for model_name in h5f.keys():
+            model_data = {}
+            feature_list = list(h5f[model_name].keys())
+
+            if sample_size is not None and sample_size < len(feature_list):
+                random.seed(seed)
+                feature_list = random.sample(feature_list, sample_size)
+
+            for feature_dataset in feature_list:
+                feature_index = int(feature_dataset.split('_')[-1])
+                activations = h5f[model_name][feature_dataset][:]
+                model_data[feature_index] = activations.tolist()
+            model_feature_activations[model_name] = model_data
+
+    return model_feature_activations
+
+
+def save_feature_activations(model_names: list[str], sample_loader: DataLoader, save_path: str) -> dict[str, str]:
     """Correlate features 
+
+    Notes:
+        Saves a separate HDF5 file for each model containing a mapping of features to their activations on samples.
 
     Args:
         model_names (list[str]): List of models.
-        sample_loader (DataLoader): Sample to get activations over.
+        sample_loader (DataLoader): Samples to get activations over.
+        save_path (str): Directory path to incrementally save HDF5 files.
 
     Returns:
-        dict[str, dict[int, list[float]]]: Mapping of models to a mapping of features and their activations on sample.
+        dict[str, str]: Mapping of file paths to saved activations for each model.
     """
     models: dict[str, tuple[Autoencoder, HookedTransformer]] = {
         model_name: load_models(name=model_name)
         for model_name in model_names
     }
+    
+    saved_files: dict[str, str] = {}
+    path = Path(save_path)
 
-    model_feature_activations: dict[str, dict[int, list[float]]] = {}
-
-    for sample in tqdm(sample_loader, desc="Computing similarities"):
-        input_ids: list[int] = sample["input_ids"]
-
-        # For each model, get the sparse encoding of for the sample sequence.
-        model_encodings: dict[str, torch.Tensor] = {
-            model_name: get_encodings(
-                input_ids=input_ids,
-                autoencoder=models[model_name][0],
-                hooked_target_model=models[model_name][1],
-            )
-            for model_name in model_names
-        }
-
-        for model in model_names:
+    for model_name, (autoencoder, hooked_model) in models.items():
+        model_save_path = path / f"activations_{model_name}.h5"
+        with h5py.File(model_save_path, "w") as h5f:
+            group = h5f.create_group('activations')
             for feature in range(16_384):
-                activations = model_feature_activations.get(model, {}).get(feature, []) + model_encodings[model][:, feature].tolist()
-                model_feature_activations[model] = model_feature_activations.get(model, {}) | { feature: activations }
+                group.create_dataset(f"feature_{feature}", (0,), maxshape=(None,), dtype='float32', compression="gzip")
 
-    return model_feature_activations
+            for sample in tqdm(sample_loader, desc=f"Computing activations for {model_name}"):
+                input_ids: list[int] = sample["input_ids"]
+                encoding = get_encodings(input_ids=input_ids, autoencoder=autoencoder, hooked_target_model=hooked_model)
+
+                for feature in range(16_384):
+                    activations = encoding[:, feature].tolist()
+                    h5_dataset = group[f'feature_{feature}']
+                    current_length = h5_dataset.shape[0]
+                    new_length = current_length + len(activations)
+                    h5_dataset.resize((new_length,))
+                    h5_dataset[current_length:new_length] = activations
+
+        saved_files[model_name] = model_save_path.as_posix()
+
+    return saved_files
 
 
-def correlated_features(model_feature_activations: dict[str, list[int, list[float]]], correlation_threshold: float) -> dict[tuple[str, str], float]:
+def correlated_features(feature_activation_paths: dict[str, str], correlation_threshold: float, output_test_scatter: bool = True) -> dict[tuple[str, str], float]:
     """Get list of pairs of highly correlated features.
 
     Args:
-        model_feature_activations (dict[str, list[int, list[float]]]): Correlation threshold.
+        feature_activation_paths (dict[str, str]): Feature activations file paths by model.
+        correlation_threshold (float): How correlated we need features to be.
+        output_test_scatter (bool, optional): Whether to output a test scatter.
+            Defaults to True.
     
     Returns:
         dict[tuple[str, str], float]: Correlated feature names and how correlated they are.
     """
+    if len(feature_activation_paths) > 2:
+        raise ValueError("Can't currently handle more than two models here.")
+
     data: dict[str, list[float]] = {}
-    for model, features in model_feature_activations.items():
-        for feature in features:
-            data[f"{model}/{feature}"] = model_feature_activations[model][feature]
-    
+
+    for model, path in feature_activation_paths.items():
+        feature_activations = load_feature_activations(file_path=path)
+        for feature, feature_data in feature_activations["activations"].items():
+            data[f"{model}/{feature}"] = feature_data
+
     df = pd.DataFrame(data)
 
     data_tensor = torch.tensor(df.values).float()
@@ -139,40 +273,33 @@ def correlated_features(model_feature_activations: dict[str, list[int, list[floa
     correlation_matrix = torch.clamp(correlation_matrix, -1, 1)
 
     torch.diagonal(correlation_matrix).fill_(0)
-
-    first_half_idx = slice(None, 16_384)
-    second_half_idx = slice(16_384, None)
-
-    sub_correlation_matrix = correlation_matrix[first_half_idx, second_half_idx]
-    high_corr_mask = sub_correlation_matrix > correlation_threshold
+    high_corr_mask = correlation_matrix > correlation_threshold
 
     high_corr_indices = high_corr_mask.nonzero()
     high_corr_indices_cpu = high_corr_indices.cpu().numpy()
-
-    column_names = df.columns
-
-    first_half_names = column_names[:16_384]
-    second_half_names = column_names[16_384:]
 
     pairs_with_correlation: dict[tuple[str, str], float] = {}
 
     for idx in high_corr_indices_cpu:
         row, col = idx
-        first_col_name = first_half_names[row]
-        second_col_name = second_half_names[col]
-        corr_value = sub_correlation_matrix[row, col].item()
 
-        pairs_with_correlation[(first_col_name, second_col_name)] = corr_value
+        name_a = df.columns[row]
+        name_b = df.columns[col]
+        corr_value = correlation_matrix[row, col].item()
+
+        if name_a == list(feature_activation_paths.keys())[0] and name_a.split("/")[0] != name_b.split("/")[0]:
+            pairs_with_correlation[(name_a, name_b)] = corr_value
 
     # Plot a wee sample.
-    test_a, test_b = list(pairs_and_how_correlated_they_are.keys())[0]
-    plt.figure(figsize=(10, 6))
-    plt.scatter(df[test_a], df[test_b], alpha=0.5)
-    plt.title(f"{test_a} vs {test_b} - correlation {pairs_and_how_correlated_they_are[(test_a, test_b)]}")
-    plt.xlabel(test_a)
-    plt.ylabel(test_b)
-    plt.grid(True)
-    plt.savefig("test.png")
+    if output_test_scatter:
+        test_a, test_b = list(pairs_with_correlation.keys())[0]
+        plt.figure(figsize=(10, 6))
+        plt.scatter(df[test_a], df[test_b], alpha=0.5)
+        plt.title(f"{test_a} vs {test_b} - correlation {pairs_with_correlation[(test_a, test_b)]}")
+        plt.xlabel(test_a)
+        plt.ylabel(test_b)
+        plt.grid(True)
+        plt.savefig("test.png")
 
     return pairs_with_correlation
 
@@ -267,6 +394,7 @@ def correlate_feature_activations(model_names: list[str], sample_loader: DataLoa
 
 def correlate(file_path: str) -> None:
     comparison_config = ComparisonConfig.from_toml_path(file_path=file_path)
+
     _, dataset = datasplit_from_dataset_config(
         dataset_config=comparison_config.dataset_config,
         training_config=Accelerator(),
@@ -278,22 +406,30 @@ def correlate(file_path: str) -> None:
         batch_size=1,
     )
 
+    # Output path for small files.
     output_path: Path = Path(comparison_config.output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    model_activations: dict[str, dict[int, list[float]]] = feature_activations(
-        model_names=["baby-python", "lua"],
-        sample_loader=sample_loader
-    )
+    # Recreate output path in place with more space.
+    output_path_with_space: Path = Path(PATH_WITH_ENOUGH_SPACE) / comparison_config.output_path
+    output_path_with_space.parent.mkdir(parents=True, exist_ok=True)
+    output_path_with_space = output_path_with_space.parent
+
+    if not os.getenv("ONLY_CORRELATION"):
+        activation_paths: dict[str, str] = save_feature_activations(
+            model_names=comparison_config.model_names[:2],
+            sample_loader=sample_loader,
+            save_path=(output_path_with_space)
+        )
 
     pairs_and_how_correlated_they_are: dict[tuple[str, str], float] = correlated_features(
-        model_feature_activations=model_activations,
-        correlation_threshold=0.7
+        feature_activation_paths={ model: output_path_with_space / f"activations_{model}.h5" for model in comparison_config.model_names[:2] },
+        correlation_threshold=comparison_config.correlation_threshold,
+        sample_size=50000
     )
 
-    pairs_data: dict[str, float] = { f"{a}->{b}": correlation for (a, b), correlation in pairs_and_how_correlated_they_are}
+    pairs_data: dict[str, float] = { f"{a}->{b}": correlation for (a, b), correlation in pairs_and_how_correlated_they_are.items()}
     (output_path.parent / "pairs_and_how_correlated_they_are.json").open("w+").write(json.dumps(pairs_data))
-    (output_path.parent / "feature_activations.json").open("w+").write(json.dumps(model_activations))
 
     similar_features: list[dict[str, int]] = correlate_feature_activations(
         model_names=comparison_config.model_names,

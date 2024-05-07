@@ -16,6 +16,7 @@ class ComparisonConfig(BaseModel):
     similarity_threshold: float = Field(..., description="Similarity threshold for feature activation pattern.")
     consistency_threshold: float = Field(..., description="Consistency threshold for feature flow.")
     output_path: str = Field(..., description="Output path for JSON list of similar features.")
+    correlation_threshold: float = Field(default=0.5, description="Correlation threshold for cross-model activation pairs in correlation matrix.")
 
     @classmethod
     def from_toml_path(cls, file_path: str) -> Self:

@@ -1,9 +1,10 @@
 [comparison]
 model_names = ["lua", "slerp"]
-sample_size = 1000
+sample_size = 5000
 similarity_threshold = 0.05
 consistency_threshold = 0.95
-output_path = "data/flow/lua_slerp_flow.json"
+output_path = "data/flow/lua_slerp/lua_slerp_flow.json"
+correlation_threshold = 0.7
 
 [comparison.dataset_config]
 dataset_id = "nilq/small-lua-stack"

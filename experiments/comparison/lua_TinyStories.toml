@@ -1,10 +1,10 @@
 [comparison]
-model_names = ["baby-python", "lua", "tiny-stories", "slerp"]
-sample_size = 5000
+model_names = ["lua", "tiny-stories"]
+sample_size = 100
 similarity_threshold = 0.05
-consistency_threshold = 0.8
-output_path = "data/flow/all_models_flow.json"
-correlation_threshold = 0.5
+consistency_threshold = 0.95
+output_path = "data/flow/lua_TinyStories/lua_TinyStories_flow.json"
+correlation_threshold = 0.7
 
 [comparison.dataset_config]
 dataset_id = "nilq/baby-python"

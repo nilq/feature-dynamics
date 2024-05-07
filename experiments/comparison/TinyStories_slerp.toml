@@ -3,11 +3,12 @@ model_names = ["tiny-stories", "slerp"]
 sample_size = 1000
 similarity_threshold = 0.05
 consistency_threshold = 0.95
-output_path = "data/flow/TinyStories_slerp_flow.json"
+output_path = "data/flow/TinyStories_slerp/TinyStories_slerp_flow.json"
+correlation_threshold = 0.7
 
 [comparison.dataset_config]
 dataset_id = "roneneldan/TinyStories"
-dataset_text_key = "content"
+dataset_text_key = "text"
 tokenizer_id = "mistralai/Mistral-7B-v0.1"
 block_size = 24
 use_syntaxi = false
