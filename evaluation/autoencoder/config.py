@@ -6,17 +6,28 @@ from pydantic import BaseModel, Field
 
 from training.transformer.config import DatasetConfig
 
+
 class ComparisonConfig(BaseModel):
     """Configuration of comparison experiments."""
+
     model_names: list[str] = Field(..., description="Names of models to compare.")
     dataset_config: DatasetConfig = Field(
         ..., description="Text dataset used for evaluation."
     )
     sample_size: int = Field(..., description="Sample size to evaluate on.")
-    similarity_threshold: float = Field(..., description="Similarity threshold for feature activation pattern.")
-    consistency_threshold: float = Field(..., description="Consistency threshold for feature flow.")
-    output_path: str = Field(..., description="Output path for JSON list of similar features.")
-    correlation_threshold: float = Field(default=0.5, description="Correlation threshold for cross-model activation pairs in correlation matrix.")
+    similarity_threshold: float = Field(
+        ..., description="Similarity threshold for feature activation pattern."
+    )
+    consistency_threshold: float = Field(
+        ..., description="Consistency threshold for feature flow."
+    )
+    output_path: str = Field(
+        ..., description="Output path for JSON list of similar features."
+    )
+    correlation_threshold: float = Field(
+        default=0.5,
+        description="Correlation threshold for cross-model activation pairs in correlation matrix.",
+    )
 
     @classmethod
     def from_toml_path(cls, file_path: str) -> Self:
