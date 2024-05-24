@@ -48,6 +48,7 @@ def get_activation_frequencies(
         encoder.config.hidden_size, dtype=torch.float32
     ).to(device)
     total: int = 0
+    l0_norm_sum: float = 0.0
 
     for text in samples:
         activations = get_model_activations(
@@ -56,14 +57,21 @@ def get_activation_frequencies(
             layer=target_layer,
             activation_name=target_activation_name,
         )
-        hidden = encoder(activations, use_ghost_gradients=False)[2]
-        frequency_scores += (hidden > 0).sum(0)
-        total += hidden.shape[0]
 
+        latents = encoder(activations, use_ghost_gradients=False)[2]
+        frequency_scores += (latents > 0).sum(-2)
+
+        total += latents.shape[0]
+        
+        # Compute L0 mean across samples
+        l0_norm_current = (latents != 0).sum(dim=(0, 1)).float()
+        l0_norm_sum += l0_norm_current
+
+    l0_mean = l0_norm_sum / total
     frequency_scores /= total
-    dead_percentage = (frequency_scores == 0).float().mean()
+    dead_percentage = (frequency_scores < 1e-10).float().mean()
 
-    return frequency_scores, dead_percentage
+    return frequency_scores, dead_percentage, l0_mean
 
 
 def get_uniform_sample_loader(dataset, sample_size, batch_size=1):
@@ -123,11 +131,11 @@ def train_epoch(
                     > training_config.dead_feature_window
                 ).bool()
 
-                print("Max dead length:", forward_passes_since_last_activation[i].max())
-                print(
-                    "Ghost gradient mask, any non-0 mask:",
-                    ghost_gradient_neuron_mask.any(),
-                )
+                # print("Max dead length:", forward_passes_since_last_activation[i].max())
+                # print(
+                #     "Ghost gradient mask, any non-0 mask:",
+                #     ghost_gradient_neuron_mask.any(),
+                # )
 
             model.train()
             loss, _, latents_pre_act, l2_loss, l1_loss = model(
@@ -139,7 +147,7 @@ def train_epoch(
             if training_config.use_ghost_gradients:
                 # Feature activation book-keeping.
                 did_fire = ((latents_pre_act > 0).float().sum(-2) > 0).any(dim=0)
-                print("Fire mean", did_fire.float().mean())
+                # print("Fire mean", did_fire.float().mean())
                 forward_passes_since_last_activation += 1
                 forward_passes_since_last_activation[did_fire] = 0
 
@@ -156,7 +164,7 @@ def train_epoch(
 
         if accelerator.sync_gradients and accelerator.is_main_process:
             if training_config.wandb:
-                if i % 10 == 0:
+                if i % 100 == 0:
                     wandb.log(
                         {
                             "loss": loss.item(),
@@ -165,7 +173,7 @@ def train_epoch(
                         }
                     )
 
-                if i % 100 == 0:
+                if i % 500 == 0:
                     # TODO: Configurable interval.
                     reconstruction_score, *_ = get_reconstruction_loss(
                         model=target_model,
@@ -174,16 +182,15 @@ def train_epoch(
                         target_activation_name=training_config.data.target_activation_name,
                     )
 
-                    (
-                        activation_frequencies,
-                        dead_percentage,
-                    ) = get_activation_frequencies(
-                        model=target_model,
-                        encoder=model,
-                        samples=texts,
-                        target_activation_name=training_config.data.target_activation_name,
-                        target_layer=training_config.data.target_layer,
-                        device=model.device,
+                    activation_frequencies, dead_percentage, l0_mean = (
+                        get_activation_frequencies(
+                            model=target_model,
+                            encoder=model,
+                            samples=texts,
+                            target_activation_name=training_config.data.target_activation_name,
+                            target_layer=training_config.data.target_layer,
+                            device=model.device,
+                        )
                     )
 
                     feature_sparsity = activation_frequencies / active_tokens
@@ -201,16 +208,6 @@ def train_epoch(
                     )
                     frequency_below_1e_minus_2 = (
                         (activation_frequencies < 1e-2).float().mean().item()
-                    )
-
-                    # Explainability.
-                    l0_mean = (
-                        (activation_frequencies > 0)
-                        .float()
-                        .sum(-1)
-                        .detach()
-                        .mean()
-                        .item()
                     )
 
                     # Feature sparsity histogram.

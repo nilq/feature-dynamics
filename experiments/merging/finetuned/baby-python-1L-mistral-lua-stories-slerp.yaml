@@ -5,5 +5,5 @@ merge_method: slerp
 base_model: nilq/baby-python-mistral-1L-tiny-lua-ft
 parameters:
   t:
-    - value: 0.41
+    - value: 0.58
 dtype: float16

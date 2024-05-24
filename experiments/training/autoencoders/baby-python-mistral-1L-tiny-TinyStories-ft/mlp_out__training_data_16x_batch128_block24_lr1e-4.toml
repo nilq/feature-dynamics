@@ -9,8 +9,8 @@ dead_feature_window = 1000
 seed = 1337
 
 [training.model]
-l1_coefficient = 0.1
-torch_dtype = "bfloat16"
+l1_coefficient = 3e-3
+torch_dtype = "float32"
 tied = false
 
 [training.wandb]
