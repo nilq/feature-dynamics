@@ -6,10 +6,10 @@ This repository contains the code and experiment configurations for reproducing 
 
 In the paper, we study the following toy models:
 
-1. [BabyPython](https://huggingface.co/nilq/baby-python-mistral-1L-tiny-base) basy model.
-2. [TinyStories](https://huggingface.co/nilq/baby-python-mistral-1L-tiny-TinyStories-ft) – BabyPython fine-tuned on TinyStories.
-3. [Lua](https://huggingface.co/nilq/baby-python-mistral-1L-tiny-lua-ft) – BabyPython fine-tuned on Lua subset of TheStack.
-4. [LuaStories-merge](https://huggingface.co/nilq/baby-python-1L-mistral-lua-stories-slerp) spherical linear interpolation of Lua and TinyStories models with `t = 0.58`.
+1. [BabyPython](https://huggingface.co/nilq/baby-python-mistral-1L-tiny-base): single-layer Mistral model trained on a mixture of BabyML and the Python subset of the stack.
+2. [TinyStories](https://huggingface.co/nilq/baby-python-mistral-1L-tiny-TinyStories-ft): BabyPython fine-tuned on TinyStories.
+3. [Lua](https://huggingface.co/nilq/baby-python-mistral-1L-tiny-lua-ft): BabyPython fine-tuned on Lua subset of TheStack.
+4. [LuaStories-merge](https://huggingface.co/nilq/baby-python-1L-mistral-lua-stories-slerp): spherical linear interpolation of Lua and TinyStories models at `t = 0.58`.
 
 ## Getting started
 
