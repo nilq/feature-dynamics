@@ -29,6 +29,8 @@ poetry install
 
 ## End-to-end Toolkit
 
+This repository contains all of the components built throughout the iteration on the research and [paper](https://arxiv.org/abs/2410.12391).
+
 ### Training
 
 #### Transformers 
