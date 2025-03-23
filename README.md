@@ -47,9 +47,7 @@ Train sparse autoencoder.
 poetry run python training/autoencoder/train.py <experiment.toml>
 ```
 
-Using TransformerLens's `HookedTransformer` (specifically via [my hacked fork](https://github.com/nilq/TransformerLens)*) to train sparse autoencoders.
-
-\* This one is required to hook custom Mistral models.
+Using TransformerLens's `HookedTransformer` (specifically via [this fork](https://github.com/nilq/TransformerLens) to add Mistral hooks) to train sparse autoencoders.
 
 ### Evaluation
 
