@@ -1,6 +1,6 @@
 # feature-dynamics
 
-This repository contains the code and experiment configurations for reproducing the results in []().
+This repository contains the code and experiment configurations for reproducing the results in [Tracking Universal Features Through Fine-Tuning and Model Merging](https://arxiv.org/abs/2410.12391).
 
 ---
 
